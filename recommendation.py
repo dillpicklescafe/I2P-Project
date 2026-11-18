@@ -1,11 +1,17 @@
+import random
 from exercises import exercises
 
-def recommend_workout(goal, level, available_equipment, duration):
+
+def recommend_workout(goal, level, available_equipment, duration, shuffle=True):
 
     workout = []
     total_duration = 0
 
-    for exercise in exercises:
+    candidates = list(exercises)
+    if shuffle:
+        random.shuffle(candidates)
+
+    for exercise in candidates:
 
         if goal not in exercise["goals"]:
             continue
@@ -13,17 +19,14 @@ def recommend_workout(goal, level, available_equipment, duration):
         if exercise["level"] != level:
             continue
 
-        equipment_matches = True
-
-        for item in exercise["equipment"]:
-            if item not in available_equipment:
-                equipment_matches = False
+        equipment_matches = all(
+            item in available_equipment for item in exercise["equipment"]
+        )
 
         if not equipment_matches:
             continue
 
         if total_duration + exercise["duration"] <= duration:
-
             workout.append(exercise)
             total_duration += exercise["duration"]
 
@@ -31,13 +34,7 @@ def recommend_workout(goal, level, available_equipment, duration):
 
 
 def calculate_workout_duration(workout):
-
-    total_duration = 0
-
-    for exercise in workout:
-        total_duration += exercise["duration"]
-
-    return total_duration
+    return sum(exercise["duration"] for exercise in workout)
 
 
 def display_workout(workout):
@@ -52,16 +49,20 @@ def display_workout(workout):
     for exercise in workout:
         print("Exercise:", exercise["name"])
         print("Sets:", exercise["sets"])
-        print("Reps:", exercise["reps"])
+
+        if exercise["reps"] is not None:
+            print("Reps:", exercise["reps"])
+        elif exercise["hold_seconds"] is not None:
+            print("Hold:", exercise["hold_seconds"], "seconds")
+        else:
+            print("Pace: Continuous for duration")
+
         print("Duration:", exercise["duration"], "minutes")
         print("------------------------")
 
     total_duration = calculate_workout_duration(workout)
-
     print("Total workout duration:", total_duration, "minutes")
 
-
-# Test recommendation system
 if __name__ == "__main__":
 
     goal = "first_pushup"
