@@ -73,10 +73,13 @@ def filter_exercises(goal, level, available_equipment):
         return []
 
     normalized_equipment = []
+    valid_equipment = get_available_equipment()
     for item in available_equipment:
         if not isinstance(item, str):
             return []
         normalized_item = item.strip().lower().replace(" ", "_")
+        if normalized_item not in valid_equipment:
+            return []
         if normalized_item not in normalized_equipment:
             normalized_equipment.append(normalized_item)
 
@@ -122,7 +125,6 @@ def recommend_workout(goal, level, available_equipment, duration, shuffle=True,
         random_generator = random.Random(random_seed)
         random_generator.shuffle(candidates)
 
-    # Prefer a new main body area before adding another similar exercise.
     varied_candidates = []
     repeated_candidates = []
 
@@ -141,8 +143,6 @@ def recommend_workout(goal, level, available_equipment, duration, shuffle=True,
         if exercise["name"] in selected_names:
             continue
 
-        # Easier and harder variations teach the same movement progression.
-        # Use only one variation in a workout to avoid unnecessary repetition.
         is_progression_duplicate = False
         for selected_exercise in workout:
             selected_variations = [

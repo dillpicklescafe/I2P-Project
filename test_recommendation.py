@@ -19,11 +19,21 @@ REQUIRED_FIELDS = [
 
 
 class ExerciseDatabaseTests(unittest.TestCase):
-    def test_ids_are_unique_and_sequential(self):
+    def test_original_source_ids_are_preserved(self):
         ids = []
         for exercise in exercises:
             ids.append(exercise["id"])
-        self.assertEqual(ids, list(range(1, len(exercises) + 1)))
+        excluded_ids = {
+            31, 38, 41, 44, 45, 48, 50, 54, 55, 57,
+            58, 59, 62, 63, 64, 67, 69, 72, 73, 74,
+            75, 77, 84, 87, 90, 97, 103, 104, 112, 113,
+            114, 117, 119, 124, 126, 128, 132, 133, 135, 136
+        }
+        expected_ids = []
+        for source_id in range(1, 151):
+            if source_id not in excluded_ids:
+                expected_ids.append(source_id)
+        self.assertEqual(ids, expected_ids)
 
     def test_names_are_unique(self):
         names = []
@@ -120,6 +130,9 @@ class RecommendationTests(unittest.TestCase):
         self.assertEqual(recommend_workout("not_a_goal", "beginner", [], 10), [])
         self.assertEqual(recommend_workout("mobility", "expert", [], 10), [])
         self.assertEqual(recommend_workout("mobility", "beginner", None, 10), [])
+        self.assertEqual(recommend_workout(
+            "mobility", "beginner", ["not_equipment"], 10
+        ), [])
         self.assertEqual(recommend_workout("mobility", "beginner", [], -1), [])
         self.assertEqual(recommend_workout("mobility", "beginner", [], "ten"), [])
 

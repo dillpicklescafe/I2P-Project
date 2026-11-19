@@ -3679,9 +3679,7 @@ cardio_intervals = {
     "Invisible Jump Rope": [30, 30]
 }
 
-for new_id in range(len(curated_exercises)):
-    exercise = curated_exercises[new_id]
-    exercise["id"] = new_id + 1
+for exercise in curated_exercises:
     exercise["exercise_type"] = exercise["type"]
     exercise["work_seconds"] = None
     exercise["rest_seconds"] = None
