@@ -420,7 +420,7 @@ exercises = [
         "id": 18,
         "name": "Knee Plank",
         "body_area": ["core"],
-        "goals": ["core_stability"],
+        "goals": ["core_stability", "first_pushup"],
         "type": "stability",
         "level": "beginner",
         "position": "floor",
@@ -1032,7 +1032,7 @@ exercises = [
         "id": 43,
         "name": "Scapular Push-up",
         "body_area": ["shoulders", "chest", "core"],
-        "goals": ["upper_body_strength", "posture"],
+        "goals": ["upper_body_strength", "posture", "first_pushup"],
         "type": "stability",
         "level": "beginner",
         "position": "floor",
@@ -3649,6 +3649,61 @@ exercises = [
     }
 
 ]
+
+# Keep a focused set for LockIn. The omitted records remain above so the
+# database can be expanded later without having to recreate them.
+excluded_exercise_ids = [
+    31, 38, 41, 44, 45, 48, 50, 54, 55, 57,
+    58, 59, 62, 63, 64, 67, 69, 72, 73, 74,
+    75, 77, 84, 87, 90, 97, 103, 104, 112, 113,
+    114, 117, 119, 124, 126, 128, 132, 133, 135, 136
+]
+
+curated_exercises = []
+
+for exercise in exercises:
+    if exercise["id"] not in excluded_exercise_ids:
+        curated_exercises.append(exercise)
+
+# Normalize fields used by the recommendation system. Planning values such as
+# sets, repetitions, hold time, intervals, and duration are LockIn estimates,
+# not values imported from the external dataset.
+cardio_intervals = {
+    "Jumping Jack": [30, 30],
+    "High Knees": [30, 30],
+    "Butt Kicks": [30, 30],
+    "Mountain Climber": [30, 30],
+    "Elevated Mountain Climber": [30, 30],
+    "Shadow Boxing": [45, 30],
+    "Speed Skater": [30, 30],
+    "Invisible Jump Rope": [30, 30]
+}
+
+for new_id in range(len(curated_exercises)):
+    exercise = curated_exercises[new_id]
+    exercise["id"] = new_id + 1
+    exercise["exercise_type"] = exercise["type"]
+    exercise["work_seconds"] = None
+    exercise["rest_seconds"] = None
+    exercise["video_url"] = None
+
+    if exercise["name"] in cardio_intervals:
+        interval = cardio_intervals[exercise["name"]]
+        exercise["work_seconds"] = interval[0]
+        exercise["rest_seconds"] = interval[1]
+
+exercise_names = []
+
+for exercise in curated_exercises:
+    exercise_names.append(exercise["name"])
+
+for exercise in curated_exercises:
+    if exercise["easier_variation"] not in exercise_names:
+        exercise["easier_variation"] = None
+    if exercise["harder_variation"] not in exercise_names:
+        exercise["harder_variation"] = None
+
+exercises = curated_exercises
 
 # DATABASE CHECK
 
