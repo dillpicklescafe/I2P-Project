@@ -18,6 +18,7 @@ class WorkoutLogTests(unittest.TestCase):
         )
 
         self.exercise = {
+            "id": 1,
             "name": "Wall Push-up",
             "sets": 2,
             "reps": 10

@@ -2,9 +2,7 @@ from datetime import datetime
 
 
 def start_workout(goal=None, notes=""):
-    """
-    Create a new workout session.
-    """
+    """Create a new workout session."""
 
     session = {
         "session_id": datetime.now().strftime("%Y%m%d%H%M%S%f"),
@@ -20,9 +18,7 @@ def start_workout(goal=None, notes=""):
 
 def add_exercise(session, exercise, sets_completed,
                  reps_completed=None, duration_minutes=0, notes=""):
-    """
-    Add an exercise that the user has actually completed.
-    """
+    """Add an exercise that the user has actually completed."""
 
     if not isinstance(sets_completed, int) or isinstance(sets_completed, bool) or sets_completed <= 0:
         raise ValueError("Sets completed must be a positive integer.")
@@ -37,7 +33,13 @@ def add_exercise(session, exercise, sets_completed,
     if not isinstance(exercise, dict) or not exercise.get("name"):
         raise ValueError("A valid exercise dictionary is required.")
 
+    exercise_id = exercise.get("id")
+
+    if not isinstance(exercise_id, int) or isinstance(exercise_id, bool) or exercise_id <= 0:
+        raise ValueError("Exercise must have a valid positive integer ID.")
+
     completed_exercise = {
+        "exercise_id": exercise_id,
         "name": exercise["name"],
         "sets_completed": sets_completed,
         "reps_completed": reps_completed,
@@ -51,9 +53,7 @@ def add_exercise(session, exercise, sets_completed,
 
 
 def calculate_total_duration(session):
-    """
-    Calculate the total actual exercise duration.
-    """
+    """Calculate the total actual exercise duration."""
 
     total = 0
 
@@ -64,9 +64,7 @@ def calculate_total_duration(session):
 
 
 def complete_workout(session):
-    """
-    Mark a workout session as completed.
-    """
+    """Mark a workout session as completed."""
 
     if not session["exercises"]:
         raise ValueError("Cannot complete an empty workout.")
@@ -78,11 +76,10 @@ def complete_workout(session):
 
 
 def get_workout_summary(session):
-    """
-    Generate a summary of a workout session.
-    """
+    """Generate a summary of a workout session."""
 
     total_exercises = len(session["exercises"])
+
     total_sets = sum(
         exercise["sets_completed"]
         for exercise in session["exercises"]

@@ -7,13 +7,10 @@ DATABASE_NAME = "fitness_tracker.db"
 
 
 def initialize_database(db_path=DATABASE_NAME):
-    """
-    Create the workout and exercise tables if they do not exist.
-    """
+    """Create or update the workout database."""
 
     with closing(sqlite3.connect(db_path)) as connection:
         with connection:
-
             connection.execute("PRAGMA foreign_keys = ON")
 
             connection.execute("""
@@ -31,6 +28,7 @@ def initialize_database(db_path=DATABASE_NAME):
                 CREATE TABLE IF NOT EXISTS workout_exercises (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     session_id TEXT NOT NULL,
+                    exercise_id INTEGER,
                     name TEXT NOT NULL,
                     sets_completed INTEGER NOT NULL,
                     reps_completed INTEGER,
@@ -42,11 +40,22 @@ def initialize_database(db_path=DATABASE_NAME):
                 )
             """)
 
+            # Migrate existing databases that don't have exercise_id.
+            columns = connection.execute(
+                "PRAGMA table_info(workout_exercises)"
+            ).fetchall()
+
+            column_names = [column[1] for column in columns]
+
+            if "exercise_id" not in column_names:
+                connection.execute("""
+                    ALTER TABLE workout_exercises
+                    ADD COLUMN exercise_id INTEGER
+                """)
+
 
 def save_workout(session, db_path=DATABASE_NAME):
-    """
-    Save a completed workout and its exercises to SQLite.
-    """
+    """Save a completed workout and its exercises to SQLite."""
 
     if not session.get("completed"):
         raise ValueError("Only completed workouts can be saved.")
@@ -54,11 +63,21 @@ def save_workout(session, db_path=DATABASE_NAME):
     if not session.get("exercises"):
         raise ValueError("Workout must contain at least one exercise.")
 
+    # Validate exercise records before saving.
+    for exercise in session["exercises"]:
+        exercise_id = exercise.get("exercise_id")
+
+        if (
+            not isinstance(exercise_id, int)
+            or isinstance(exercise_id, bool)
+            or exercise_id <= 0
+        ):
+            raise ValueError("Every exercise must have a valid exercise ID.")
+
     initialize_database(db_path)
 
     with closing(sqlite3.connect(db_path)) as connection:
         with connection:
-
             connection.execute("PRAGMA foreign_keys = ON")
 
             connection.execute("""
@@ -77,15 +96,16 @@ def save_workout(session, db_path=DATABASE_NAME):
             ))
 
             for exercise in session["exercises"]:
-
                 connection.execute("""
                     INSERT INTO workout_exercises (
-                        session_id, name, sets_completed,
-                        reps_completed, duration_minutes, notes
+                        session_id, exercise_id, name,
+                        sets_completed, reps_completed,
+                        duration_minutes, notes
                     )
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                 """, (
                     session["session_id"],
+                    exercise["exercise_id"],
                     exercise["name"],
                     exercise["sets_completed"],
                     exercise["reps_completed"],
@@ -97,15 +117,12 @@ def save_workout(session, db_path=DATABASE_NAME):
 
 
 def get_workout_history(db_path=DATABASE_NAME):
-    """
-    Retrieve all saved workouts with progress summaries.
-    """
+    """Retrieve all saved workouts with progress summaries."""
 
     initialize_database(db_path)
 
     with closing(sqlite3.connect(db_path)) as connection:
         with connection:
-
             connection.row_factory = sqlite3.Row
 
             rows = connection.execute("""
@@ -129,15 +146,12 @@ def get_workout_history(db_path=DATABASE_NAME):
 
 
 def get_workout_by_id(session_id, db_path=DATABASE_NAME):
-    """
-    Retrieve one workout and all its recorded exercises.
-    """
+    """Retrieve one workout and all its recorded exercises."""
 
     initialize_database(db_path)
 
     with closing(sqlite3.connect(db_path)) as connection:
         with connection:
-
             connection.row_factory = sqlite3.Row
 
             workout = connection.execute("""
@@ -151,6 +165,7 @@ def get_workout_by_id(session_id, db_path=DATABASE_NAME):
 
             exercises = connection.execute("""
                 SELECT
+                    exercise_id,
                     name,
                     sets_completed,
                     reps_completed,
@@ -166,4 +181,3 @@ def get_workout_by_id(session_id, db_path=DATABASE_NAME):
     result["exercises"] = [dict(row) for row in exercises]
 
     return result
-
