@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f6f2">
+  <title>LockIn — Your workout, your pace</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="LockIn home">
+      <span class="brand-mark" aria-hidden="true">L</span>
+      <span>lockin<span class="brand-period">.</span></span>
+    </a>
+    <nav id="app-nav" class="app-nav" aria-label="Main navigation" hidden>
+      <button class="nav-link is-active" type="button" data-page-target="build" aria-current="page">Build workout</button>
+      <button class="nav-link" type="button" data-page-target="library">Exercise Library</button>
+      <button class="nav-link" type="button" data-page-target="tracker">Workout Tracker</button>
+      <button class="nav-link profile-link" type="button" data-page-target="profile" aria-label="Profile" title="Profile">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="8" r="3.5"></circle>
+          <path d="M5.5 20c.5-3.5 2.8-5.5 6.5-5.5s6 2 6.5 5.5"></path>
+        </svg>
+      </button>
+    </nav>
+  </header>
+
+  <main class="page-shell">
+    <section id="auth-section" class="auth-panel panel" aria-labelledby="auth-title">
+      <p id="signup-welcome" class="signup-welcome" hidden>Welcome to LockIn</p>
+      <h1 id="auth-title">Log in</h1>
+      <form id="auth-form">
+        <div id="signup-name-fields" class="signup-name-fields" hidden>
+          <label class="field">
+            <span class="field-label">First name</span>
+            <input id="auth-first-name" name="first_name" type="text" maxlength="50" autocomplete="given-name">
+          </label>
+          <label class="field">
+            <span class="field-label">Last name</span>
+            <input id="auth-last-name" name="last_name" type="text" maxlength="50" autocomplete="family-name">
+          </label>
+        </div>
+        <label class="field">
+          <span class="field-label">Username</span>
+          <input id="auth-username" name="username" type="text" minlength="3" maxlength="32" autocomplete="username" required>
+        </label>
+        <label class="field auth-password">
+          <span class="field-label">Password</span>
+          <input id="auth-password" name="password" type="password" minlength="8" maxlength="128" autocomplete="current-password" required>
+          <span id="password-hint" class="field-hint" hidden>Use 8–128 characters.</span>
+        </label>
+        <p id="auth-message" class="status-message" role="status" aria-live="polite"></p>
+        <button id="auth-submit" class="button button-primary auth-submit" type="submit">Log in <span aria-hidden="true">→</span></button>
+      </form>
+      <p class="auth-switch">
+        <span id="auth-switch-copy">Don't have an account yet?</span>
+        <a id="auth-switch-link" href="#signup">Sign up now <span aria-hidden="true">→</span></a>
+      </p>
+    </section>
+
+    <div id="app-content" hidden>
+    <section id="page-build" class="app-page">
+    <section class="intro">
+      <p class="eyebrow">YOUR BEST SELF STARTS WHEN YOU LOCK IN</p>
+      <h1>Ready when you are, <span id="welcome-name">yourself.</span></h1>
+    </section>
+
+    <section class="planner panel" aria-labelledby="planner-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">LET'S MAKE A PLAN</p>
+          <h2 id="planner-title">Build your workout</h2>
+        </div>
+        <span class="step-badge">01 <span>/ 02</span></span>
+      </div>
+
+      <form id="planner-form" class="planner-form">
+        <div class="goal-field">
+          <span class="field-label">Fitness goal</span>
+          <input id="goal" name="goal" type="hidden">
+          <div class="goal-picker">
+            <button id="goal-trigger" class="goal-trigger" type="button" aria-expanded="false" aria-controls="goal-popover">
+              <span id="goal-selected">Choose a fitness goal</span>
+              <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 7.5 5 5 5-5"></path></svg>
+            </button>
+            <div id="goal-popover" class="goal-popover" hidden>
+              <div id="goal-options" class="goal-grid" role="group" aria-label="Fitness goals">
+                <span class="field-hint">Loading goals…</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <fieldset class="difficulty-field">
+          <legend class="field-label">Difficulty</legend>
+          <div id="level-options" class="level-options">
+            <label class="level-option">
+              <input type="radio" name="level" value="beginner" checked>
+              <span>Beginner</span>
+            </label>
+            <label class="level-option">
+              <input type="radio" name="level" value="intermediate">
+              <span>Intermediate</span>
+            </label>
+            <label class="level-option">
+              <input type="radio" name="level" value="advanced">
+              <span>Advanced</span>
+            </label>
+          </div>
+        </fieldset>
+
+        <label class="field time-field">
+          <span class="field-label">Available time</span>
+          <select id="duration" name="duration" required>
+            <option value="15">15 minutes</option>
+            <option value="30" selected>30 minutes</option>
+            <option value="45">45 minutes</option>
+            <option value="60">1 hour</option>
+            <option value="75">1 hour 15 minutes</option>
+            <option value="90">1 hour 30 minutes</option>
+            <option value="105">1 hour 45 minutes</option>
+            <option value="120">2 hours</option>
+            <option value="135">2 hours 15 minutes</option>
+            <option value="150">2 hours 30 minutes</option>
+            <option value="165">2 hours 45 minutes</option>
+            <option value="180">3 hours</option>
+          </select>
+        </label>
+
+        <fieldset class="equipment-field">
+          <legend class="field-label">Equipment you have</legend>
+          <p class="field-hint">No equipment? Leave everything unchecked.</p>
+          <div id="equipment-options" class="equipment-options">
+            <span class="field-hint">Loading equipment…</span>
+          </div>
+        </fieldset>
+
+        <div class="form-footer">
+          <p class="privacy-note"><span aria-hidden="true">✦</span> Your plan is made just for this session.</p>
+          <button class="button button-primary" type="submit" id="recommend-button" disabled>
+            <span>Start workout</span><span aria-hidden="true">→</span>
+          </button>
+        </div>
+      </form>
+      <p id="planner-message" class="status-message" role="status" aria-live="polite"></p>
+    </section>
+
+    <section id="workout-section" class="workout-section" hidden aria-labelledby="workout-title">
+      <div class="section-heading workout-heading">
+        <div>
+          <p class="eyebrow">BUILT AROUND YOU</p>
+          <h2 id="workout-title">Your workout</h2>
+          <p id="workout-summary" class="section-subtitle"></p>
+        </div>
+        <span id="completion-count" class="completion-count"></span>
+      </div>
+      <div id="exercise-list" class="exercise-list"></div>
+      <div id="save-panel" class="save-panel" hidden>
+        <label class="field notes-field">
+          <span class="field-label">A note for next time <span class="optional">(optional)</span></span>
+          <textarea id="workout-notes" rows="2" placeholder="How did it feel?"></textarea>
+        </label>
+        <div class="save-footer">
+          <p id="save-message" class="status-message" role="status" aria-live="polite"></p>
+          <button id="save-button" class="button button-primary" type="button" disabled>
+            <span>Save completed workout</span><span aria-hidden="true">✓</span>
+          </button>
+        </div>
+      </div>
+      <p id="no-results" class="empty-state" hidden>
+        No exercises fit those choices just yet. Try adding equipment or giving yourself a little more time.
+      </p>
+    </section>
+
+    </section>
+
+    <section id="page-library" class="app-page placeholder-page" hidden aria-labelledby="library-title">
+      <h1 id="library-title">Exercise Library</h1>
+    </section>
+
+    <section id="page-tracker" class="app-page" hidden>
+    <section class="history-section" aria-labelledby="history-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">YOUR PROGRESS</p>
+          <h2 id="history-title">Workout history</h2>
+        </div>
+        <span class="history-icon" aria-hidden="true">↗</span>
+      </div>
+      <div id="history-list" class="history-list">
+        <p class="field-hint">Loading your saved workouts…</p>
+      </div>
+      <p id="history-message" class="status-message" role="status" aria-live="polite"></p>
+    </section>
+    </section>
+
+    <section id="page-profile" class="app-page placeholder-page" hidden aria-labelledby="profile-title">
+      <h1 id="profile-title">Profile</h1>
+    </section>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <span>lockin<span class="brand-period">.</span></span>
+    <span id="footer-user"><span>Small steps. Strong habits.</span></span>
+    <button id="logout-button" class="logout-button" type="button" hidden>Log out</button>
+  </footer>
+</body>
+</html>

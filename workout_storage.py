@@ -14,15 +14,51 @@ def initialize_database(db_path=DATABASE_NAME):
             connection.execute("PRAGMA foreign_keys = ON")
 
             connection.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username TEXT NOT NULL UNIQUE COLLATE NOCASE,
+                    password_hash TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    first_name TEXT NOT NULL DEFAULT '',
+                    last_name TEXT NOT NULL DEFAULT ''
+                )
+            """)
+
+            user_columns = connection.execute(
+                "PRAGMA table_info(users)"
+            ).fetchall()
+            user_column_names = [column[1] for column in user_columns]
+            if "first_name" not in user_column_names:
+                connection.execute("""
+                    ALTER TABLE users
+                    ADD COLUMN first_name TEXT NOT NULL DEFAULT ''
+                """)
+            if "last_name" not in user_column_names:
+                connection.execute("""
+                    ALTER TABLE users
+                    ADD COLUMN last_name TEXT NOT NULL DEFAULT ''
+                """)
+
+            connection.execute("""
                 CREATE TABLE IF NOT EXISTS workouts (
                     session_id TEXT PRIMARY KEY,
                     date TEXT NOT NULL,
                     goal TEXT,
                     notes TEXT,
                     completed INTEGER NOT NULL,
-                    completed_at TEXT
+                    completed_at TEXT,
+                    user_id INTEGER REFERENCES users(id)
                 )
             """)
+
+            workout_columns = connection.execute(
+                "PRAGMA table_info(workouts)"
+            ).fetchall()
+            if "user_id" not in [column[1] for column in workout_columns]:
+                connection.execute("""
+                    ALTER TABLE workouts
+                    ADD COLUMN user_id INTEGER REFERENCES users(id)
+                """)
 
             connection.execute("""
                 CREATE TABLE IF NOT EXISTS workout_exercises (
@@ -54,7 +90,67 @@ def initialize_database(db_path=DATABASE_NAME):
                 """)
 
 
-def save_workout(session, db_path=DATABASE_NAME):
+def create_user(
+    username,
+    password_hash,
+    db_path=DATABASE_NAME,
+    first_name="",
+    last_name=""
+):
+    """Create an account and return its database ID."""
+    from datetime import datetime, timezone
+
+    initialize_database(db_path)
+
+    with closing(sqlite3.connect(db_path)) as connection:
+        with connection:
+            cursor = connection.execute("""
+                INSERT INTO users (
+                    username, password_hash, created_at, first_name, last_name
+                )
+                VALUES (?, ?, ?, ?, ?)
+            """, (
+                username,
+                password_hash,
+                datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                first_name,
+                last_name,
+            ))
+
+    return cursor.lastrowid
+
+
+def get_user_by_username(username, db_path=DATABASE_NAME):
+    """Retrieve an account by username, including its password hash."""
+    initialize_database(db_path)
+
+    with closing(sqlite3.connect(db_path)) as connection:
+        connection.row_factory = sqlite3.Row
+        row = connection.execute("""
+            SELECT id, username, password_hash, first_name, last_name
+            FROM users
+            WHERE username = ?
+        """, (username,)).fetchone()
+
+    return dict(row) if row is not None else None
+
+
+def get_user_by_id(user_id, db_path=DATABASE_NAME):
+    """Retrieve public account details by ID."""
+    initialize_database(db_path)
+
+    with closing(sqlite3.connect(db_path)) as connection:
+        connection.row_factory = sqlite3.Row
+        row = connection.execute("""
+            SELECT id, username, first_name, last_name
+            FROM users
+            WHERE id = ?
+        """, (user_id,)).fetchone()
+
+    return dict(row) if row is not None else None
+
+
+def save_workout(session, db_path=DATABASE_NAME, user_id=None):
     """Save a completed workout and its exercises to SQLite."""
 
     if not session.get("completed"):
@@ -62,6 +158,12 @@ def save_workout(session, db_path=DATABASE_NAME):
 
     if not session.get("exercises"):
         raise ValueError("Workout must contain at least one exercise.")
+    if user_id is not None and (
+        not isinstance(user_id, int)
+        or isinstance(user_id, bool)
+        or user_id <= 0
+    ):
+        raise ValueError("User ID must be a positive integer.")
 
     # Validate exercise records before saving.
     for exercise in session["exercises"]:
@@ -83,16 +185,17 @@ def save_workout(session, db_path=DATABASE_NAME):
             connection.execute("""
                 INSERT INTO workouts (
                     session_id, date, goal, notes,
-                    completed, completed_at
+                    completed, completed_at, user_id
                 )
-                VALUES (?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
             """, (
                 session["session_id"],
                 session["date"],
                 session["goal"],
                 session["notes"],
                 int(session["completed"]),
-                session.get("completed_at")
+                session.get("completed_at"),
+                user_id
             ))
 
             for exercise in session["exercises"]:
@@ -116,7 +219,7 @@ def save_workout(session, db_path=DATABASE_NAME):
     return session["session_id"]
 
 
-def get_workout_history(db_path=DATABASE_NAME):
+def get_workout_history(db_path=DATABASE_NAME, user_id=None):
     """Retrieve all saved workouts with progress summaries."""
 
     initialize_database(db_path)
@@ -125,7 +228,7 @@ def get_workout_history(db_path=DATABASE_NAME):
         with connection:
             connection.row_factory = sqlite3.Row
 
-            rows = connection.execute("""
+            query = """
                 SELECT
                     w.session_id,
                     w.date,
@@ -138,14 +241,18 @@ def get_workout_history(db_path=DATABASE_NAME):
                 FROM workouts w
                 LEFT JOIN workout_exercises e
                     ON w.session_id = e.session_id
-                GROUP BY w.session_id
-                ORDER BY w.date DESC
-            """).fetchall()
+            """
+            parameters = ()
+            if user_id is not None:
+                query += " WHERE w.user_id = ?"
+                parameters = (user_id,)
+            query += " GROUP BY w.session_id ORDER BY w.date DESC"
+            rows = connection.execute(query, parameters).fetchall()
 
     return [dict(row) for row in rows]
 
 
-def get_workout_by_id(session_id, db_path=DATABASE_NAME):
+def get_workout_by_id(session_id, db_path=DATABASE_NAME, user_id=None):
     """Retrieve one workout and all its recorded exercises."""
 
     initialize_database(db_path)
@@ -154,11 +261,16 @@ def get_workout_by_id(session_id, db_path=DATABASE_NAME):
         with connection:
             connection.row_factory = sqlite3.Row
 
-            workout = connection.execute("""
+            query = """
                 SELECT *
                 FROM workouts
                 WHERE session_id = ?
-            """, (session_id,)).fetchone()
+            """
+            parameters = (session_id,)
+            if user_id is not None:
+                query += " AND user_id = ?"
+                parameters = (session_id, user_id)
+            workout = connection.execute(query, parameters).fetchone()
 
             if workout is None:
                 return None
