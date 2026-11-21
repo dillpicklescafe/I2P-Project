@@ -137,6 +137,14 @@ def recommend_workout(goal, level, available_equipment, duration, shuffle=True,
             repeated_candidates.append(exercise)
 
     candidates = varied_candidates + repeated_candidates
+    if available_equipment:
+        candidates = [
+            exercise for exercise in candidates
+            if exercise["equipment"]
+        ] + [
+            exercise for exercise in candidates
+            if not exercise["equipment"]
+        ]
     selected_names = []
 
     for exercise in candidates:

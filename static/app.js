@@ -10,10 +10,12 @@ const recommendButton = document.querySelector("#recommend-button");
 const plannerMessage = document.querySelector("#planner-message");
 const workoutSection = document.querySelector("#workout-section");
 const exerciseList = document.querySelector("#exercise-list");
-const completionCount = document.querySelector("#completion-count");
-const savePanel = document.querySelector("#save-panel");
-const saveButton = document.querySelector("#save-button");
-const saveMessage = document.querySelector("#save-message");
+const workoutActions = document.querySelector("#workout-actions");
+const startButton = document.querySelector("#start-button");
+const workoutSheet = document.querySelector("#workout-sheet");
+const workoutSheetPanel = document.querySelector("#workout-sheet-panel");
+const closeWorkoutSheetButton = document.querySelector("#close-workout-sheet");
+const activeWorkoutMessage = document.querySelector("#active-workout-message");
 const historyList = document.querySelector("#history-list");
 const historyMessage = document.querySelector("#history-message");
 const authSection = document.querySelector("#auth-section");
@@ -32,8 +34,49 @@ const appContent = document.querySelector("#app-content");
 const welcomeName = document.querySelector("#welcome-name");
 const appNav = document.querySelector("#app-nav");
 let currentGoal = "";
-let workoutSaved = false;
+let currentLevel = "";
+let currentEquipment = [];
+let currentExercises = [];
+let currentDuration = 0;
+let currentRecommendationSeed = null;
 let authMode = "login";
+
+function openWorkoutSheet() {
+  workoutSheet.hidden = false;
+  workoutSheetPanel.setAttribute("aria-hidden", "false");
+  document.body.classList.add("workout-sheet-open");
+  requestAnimationFrame(() => {
+    if (!workoutSheet.hidden) workoutSheet.classList.add("is-open");
+  });
+  closeWorkoutSheetButton.focus();
+}
+
+function finishWorkoutSheetClose() {
+  workoutSheet.hidden = true;
+  document.body.classList.remove("workout-sheet-open");
+  document.querySelector("#workout-title").focus();
+}
+
+function closeWorkoutSheet() {
+  if (!workoutSheet.classList.contains("is-open")) {
+    finishWorkoutSheetClose();
+    return;
+  }
+  workoutSheet.classList.remove("is-open");
+  workoutSheetPanel.setAttribute("aria-hidden", "true");
+}
+
+workoutSheetPanel.addEventListener("transitionend", (event) => {
+  if (event.propertyName === "transform" && !workoutSheet.classList.contains("is-open")) {
+    finishWorkoutSheetClose();
+  }
+});
+
+closeWorkoutSheetButton.addEventListener("click", closeWorkoutSheet);
+workoutSheet.querySelector(".workout-sheet-backdrop").addEventListener("click", closeWorkoutSheet);
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !workoutSheet.hidden) closeWorkoutSheet();
+});
 
 const equipmentIcons = {
   bar: '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M7 11v10M11 8v16M21 8v16M25 11v10M11 16h10"/></svg>',
@@ -111,15 +154,90 @@ async function requestJson(url, options) {
   return data;
 }
 
-function updateCompletion() {
-  const checkboxes = [...exerciseList.querySelectorAll(".complete-toggle input")];
-  const completed = checkboxes.filter((checkbox) => checkbox.checked).length;
-  completionCount.textContent = `${completed} / ${checkboxes.length} complete`;
-  savePanel.hidden = checkboxes.length === 0;
-  saveButton.disabled = completed === 0 || workoutSaved;
-  checkboxes.forEach((checkbox) => {
-    checkbox.closest(".exercise-card").classList.toggle("is-complete", checkbox.checked);
+function isValidStoredExercise(exercise) {
+  const optionalNumber = (value) => value === null || Number.isFinite(value);
+  return exercise !== null
+    && typeof exercise === "object"
+    && Number.isInteger(exercise.id)
+    && typeof exercise.name === "string"
+    && Number.isInteger(exercise.sets)
+    && exercise.sets >= 1
+    && exercise.sets <= 20
+    && Number.isFinite(exercise.duration)
+    && optionalNumber(exercise.reps)
+    && optionalNumber(exercise.hold_seconds)
+    && optionalNumber(exercise.work_seconds)
+    && optionalNumber(exercise.rest_seconds)
+    && typeof exercise.level === "string"
+    && (exercise.keywords === undefined
+      || (Array.isArray(exercise.keywords)
+        && exercise.keywords.every((keyword) => typeof keyword === "string")))
+    && Array.isArray(exercise.instructions)
+    && exercise.instructions.every((instruction) => typeof instruction === "string")
+    && Array.isArray(exercise.equipment)
+    && exercise.equipment.every((item) => typeof item === "string")
+    && (exercise.media_url === null
+      || (typeof exercise.media_url === "string" && exercise.media_url.startsWith("/static/")))
+    && (exercise.media_type === null || ["gif", "mp4", "jpg", "png"].includes(exercise.media_type));
+}
+
+function isValidStoredWorkout(workout, availableGoals) {
+  return workout !== null
+    && typeof workout === "object"
+    && workout.version === 1
+    && typeof workout.session_id === "string"
+    && workout.session_id.length > 0
+    && availableGoals.includes(workout.goal)
+    && ["beginner", "intermediate", "advanced"].includes(workout.level)
+    && Number.isInteger(workout.duration)
+    && workout.duration >= 15
+    && workout.duration <= 180
+    && workout.duration % 15 === 0
+    && Array.isArray(workout.equipment)
+    && workout.equipment.every((item) => typeof item === "string")
+    && Array.isArray(workout.exercises)
+    && workout.exercises.length > 0
+    && workout.exercises.length <= 30
+    && workout.exercises.every(isValidStoredExercise)
+    && Array.isArray(workout.completed_set_keys)
+    && workout.completed_set_keys.length <= 600
+    && workout.completed_set_keys.every((key) => typeof key === "string")
+    && typeof workout.saved === "boolean"
+    && typeof workout.notes === "string";
+}
+
+function renderActiveWorkout(workout, statusMessage) {
+  const availableGoals = [...goalOptions.querySelectorAll(".goal-card")]
+    .map((card) => card.dataset.goal);
+  if (!isValidStoredWorkout(workout, availableGoals)) {
+    plannerMessage.textContent = "Your saved workout could not be restored. Please start a new workout.";
+    return;
+  }
+
+  currentGoal = workout.goal;
+  currentLevel = workout.level;
+  currentEquipment = workout.equipment;
+  currentExercises = workout.exercises;
+  currentDuration = workout.duration;
+  selectGoal(workout.goal);
+  durationSelect.value = String(workout.duration);
+  document.querySelectorAll('input[name="level"]').forEach((input) => {
+    input.checked = input.value === workout.level;
   });
+  equipmentOptions.querySelectorAll('input[name="equipment"]').forEach((input) => {
+    input.checked = workout.equipment.includes(input.value);
+  });
+  document.querySelector("#workout-focus").textContent = prettyLabel(workout.goal);
+  document.querySelector("#workout-level").textContent = prettyLabel(workout.level);
+  document.querySelector("#workout-duration").textContent = `${workout.duration} minutes`;
+  workoutActions.hidden = false;
+  startButton.hidden = true;
+  document.querySelector("#no-results").hidden = true;
+  workoutSection.hidden = false;
+  activeWorkoutMessage.textContent = statusMessage;
+  activeWorkoutMessage.className = "status-message success";
+  renderExercises();
+  workoutSection.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function renderExercise(exercise) {
@@ -147,57 +265,63 @@ function renderExercise(exercise) {
   const content = makeElement("div", "exercise-content");
   const heading = makeElement("div", "exercise-top");
   heading.append(makeElement("h3", "exercise-title", exercise.name));
-  heading.append(makeElement("span", "exercise-time", `~${exercise.duration} min`));
   content.append(heading);
 
-  const meta = makeElement("div", "exercise-meta");
-  let prescription = `${exercise.sets} sets`;
-  if (exercise.reps !== null) prescription += ` × ${exercise.reps} reps`;
-  else if (exercise.hold_seconds !== null) prescription += ` × ${exercise.hold_seconds}s hold`;
-  else if (exercise.work_seconds !== null) prescription += ` × ${exercise.work_seconds}s work`;
-  meta.append(makeElement("span", "meta-pill", prescription));
-  if (exercise.work_seconds !== null && exercise.rest_seconds !== null) {
-    meta.append(makeElement("span", "meta-pill", `${exercise.rest_seconds}s rest between sets`));
+  const keywords = (exercise.keywords || []).map(prettyLabel);
+  if (keywords.length) {
+    content.append(makeElement("p", "exercise-keywords", keywords.join(" · ")));
   }
-  content.append(meta);
 
-  const instructions = makeElement("ol");
-  exercise.instructions.forEach((instruction) => instructions.append(makeElement("li", "", instruction)));
-  content.append(instructions);
-
-  const bottom = makeElement("div", "exercise-bottom");
-  const equipment = makeElement("div", "equipment-tags");
+  const equipment = makeElement("div", "exercise-equipment");
+  equipment.setAttribute("aria-label", "Required equipment");
   if (exercise.equipment.length) {
-    exercise.equipment.forEach((item) => equipment.append(makeElement("span", "equipment-tag", prettyLabel(item))));
+    exercise.equipment.forEach((item) => {
+      const equipmentItem = makeElement("span", "exercise-equipment-item");
+      const icon = makeElement("span", "equipment-icon");
+      icon.setAttribute("aria-hidden", "true");
+      icon.innerHTML = equipmentIcons[item] || equipmentIcons.bar;
+      equipmentItem.append(icon, makeElement("span", "exercise-equipment-name", prettyLabel(item)));
+      equipment.append(equipmentItem);
+    });
   } else {
-    equipment.append(makeElement("span", "equipment-tag", "No equipment"));
+    equipment.append(makeElement("span", "no-required-equipment", "No required equipment"));
   }
-  bottom.append(equipment);
+  content.append(equipment);
 
-  const toggleLabel = makeElement("label", "complete-toggle");
-  const checkbox = makeElement("input");
-  checkbox.type = "checkbox";
-  checkbox.value = String(exercise.id);
-  checkbox.addEventListener("change", updateCompletion);
-  toggleLabel.append(checkbox, makeElement("span", "", "Done"));
-  bottom.append(toggleLabel);
-  content.append(bottom);
+  const specifics = makeElement("ul", "exercise-specifics");
+  const setCount = `${exercise.sets} ${exercise.sets === 1 ? "set" : "sets"}`;
+  let prescription = "";
+  if (exercise.reps !== null) prescription = ` × ${exercise.reps} reps`;
+  else if (exercise.hold_seconds !== null) prescription = ` × ${exercise.hold_seconds}s hold`;
+  else if (exercise.work_seconds !== null) prescription = ` × ${exercise.work_seconds}s work`;
+  specifics.append(makeElement("li", "", `${setCount}${prescription}`));
+  if (Number.isFinite(exercise.rest_seconds) && exercise.rest_seconds > 0) {
+    specifics.append(makeElement("li", "", `${exercise.rest_seconds}s rest between sets`));
+  }
+  content.append(specifics);
   card.append(content);
   return card;
 }
 
-function renderRecommendations(exercises, goal, duration) {
-  workoutSaved = false;
+function renderExercises() {
+  exerciseList.replaceChildren(...currentExercises.map(renderExercise));
+}
+
+function renderEmptyWorkout(goal, level, duration, message) {
   currentGoal = goal;
-  exerciseList.replaceChildren(...exercises.map(renderExercise));
-  document.querySelector("#workout-summary").textContent =
-    `${prettyLabel(goal)} · ${prettyLabel(document.querySelector('input[name="level"]:checked').value)} · up to ${duration} minutes`;
-  document.querySelector("#no-results").hidden = exercises.length !== 0;
-  savePanel.hidden = exercises.length === 0;
+  currentExercises = [];
+  currentDuration = duration;
+  document.querySelector("#workout-focus").textContent = prettyLabel(goal);
+  document.querySelector("#workout-level").textContent = prettyLabel(level);
+  document.querySelector("#workout-duration").textContent = `${duration} minutes`;
+  exerciseList.replaceChildren();
+  const noResults = document.querySelector("#no-results");
+  noResults.hidden = false;
+  noResults.textContent = message;
   workoutSection.hidden = false;
-  saveMessage.textContent = "";
-  saveMessage.className = "status-message";
-  updateCompletion();
+  workoutActions.hidden = true;
+  startButton.hidden = true;
+  activeWorkoutMessage.textContent = "";
   workoutSection.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
@@ -279,6 +403,20 @@ async function loadOptions() {
   }
 }
 
+async function loadActiveWorkout() {
+  try {
+    const data = await requestJson("/api/active-workout");
+    if (data.active_workout) {
+      renderActiveWorkout(
+        data.active_workout,
+        ""
+      );
+    }
+  } catch (error) {
+    plannerMessage.textContent = error.message;
+  }
+}
+
 goalTrigger.addEventListener("click", () => {
   setGoalPickerOpen(goalPopover.hidden);
 });
@@ -343,6 +481,7 @@ async function showApp(user) {
   document.querySelector("#footer-user").firstElementChild.textContent = `Signed in as ${user.username}`;
   showPage("build");
   await Promise.all([loadOptions(), loadHistory()]);
+  await loadActiveWorkout();
 }
 
 async function checkSession() {
@@ -396,6 +535,17 @@ logoutButton.addEventListener("click", async () => {
     appNav.hidden = true;
     authSection.hidden = false;
     logoutButton.hidden = true;
+    currentGoal = "";
+    currentLevel = "";
+    currentEquipment = [];
+    currentExercises = [];
+    currentDuration = 0;
+    currentRecommendationSeed = null;
+    workoutSection.hidden = true;
+    workoutActions.hidden = true;
+    startButton.hidden = true;
+    exerciseList.replaceChildren();
+    activeWorkoutMessage.textContent = "";
     historyList.replaceChildren(makeElement("p", "field-hint", "Log in to see your saved workouts."));
     setAuthMode("login");
   } catch (error) {
@@ -427,7 +577,27 @@ document.querySelector("#planner-form").addEventListener("submit", async (event)
         duration,
       }),
     });
-    renderRecommendations(data.exercises, goalSelect.value, duration);
+    if (!data.exercises.length) {
+      renderEmptyWorkout(goalSelect.value, level, duration, data.empty_message);
+      return;
+    }
+    currentGoal = goalSelect.value;
+    currentLevel = level;
+    currentEquipment = [...equipmentOptions.querySelectorAll("input:checked")]
+      .map((input) => input.value);
+    currentExercises = data.exercises;
+    currentDuration = duration;
+    currentRecommendationSeed = data.recommendation_seed;
+    document.querySelector("#workout-focus").textContent = prettyLabel(currentGoal);
+    document.querySelector("#workout-level").textContent = prettyLabel(level);
+    document.querySelector("#workout-duration").textContent = `${duration} minutes`;
+    workoutActions.hidden = false;
+    startButton.hidden = false;
+    document.querySelector("#no-results").hidden = true;
+    workoutSection.hidden = false;
+    activeWorkoutMessage.textContent = "";
+    renderExercises();
+    workoutSection.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (error) {
     plannerMessage.textContent = error.message;
   } finally {
@@ -435,29 +605,31 @@ document.querySelector("#planner-form").addEventListener("submit", async (event)
   }
 });
 
-saveButton.addEventListener("click", async () => {
-  const completedExercises = [...exerciseList.querySelectorAll(".complete-toggle input:checked")]
-    .map((checkbox) => Number(checkbox.value));
-  saveButton.disabled = true;
-  saveMessage.textContent = "";
+startButton.addEventListener("click", async () => {
+  startButton.disabled = true;
+  plannerMessage.textContent = "";
   try {
-    await requestJson("/api/workouts", {
+    const data = await requestJson("/api/active-workout", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         goal: currentGoal,
-        completed_exercises: completedExercises,
-        notes: document.querySelector("#workout-notes").value,
+        level: currentLevel,
+        equipment: currentEquipment,
+        duration: currentDuration,
+        recommendation_seed: currentRecommendationSeed,
       }),
     });
-    workoutSaved = true;
-    saveMessage.textContent = "Workout saved. Nice work showing up!";
-    saveMessage.className = "status-message success";
-    updateCompletion();
-    await loadHistory();
+    if (!data.active_workout) {
+      plannerMessage.textContent = data.empty_message;
+      return;
+    }
+    renderActiveWorkout(data.active_workout, "Workout started and saved.");
+    openWorkoutSheet();
   } catch (error) {
-    saveMessage.textContent = error.message;
-    updateCompletion();
+    plannerMessage.textContent = error.message;
+  } finally {
+    startButton.disabled = false;
   }
 });
 

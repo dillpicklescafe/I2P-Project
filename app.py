@@ -22,6 +22,7 @@ from recommendation import (
     VALID_LEVELS,
     get_available_equipment,
     get_available_goals,
+    filter_exercises,
     recommend_workout,
 )
 from workout_log import add_exercise, complete_workout, start_workout
@@ -30,9 +31,11 @@ from workout_storage import (
     create_user,
     get_user_by_id,
     get_user_by_username,
+    get_active_workout,
     get_workout_by_id,
     get_workout_history,
     initialize_database,
+    save_active_workout,
     save_workout,
 )
 
@@ -45,7 +48,21 @@ PASSWORD_MIN_LENGTH = 8
 PASSWORD_MAX_LENGTH = 128
 
 
-def build_recommendation(data):
+def get_exercise_keywords(exercise):
+    """Collect concise focus terms from an exercise's existing metadata."""
+    keywords = []
+    candidates = exercise.get("keywords") or [
+        *exercise["goals"],
+        *exercise["body_area"],
+        exercise["type"],
+    ]
+    for keyword in candidates:
+        if keyword not in keywords:
+            keywords.append(keyword)
+    return keywords
+
+
+def build_recommendation(data, random_seed=None):
     """Validate form selections and return recommended exercises for the UI."""
     goal = data.get("goal")
     level = data.get("level")
@@ -70,7 +87,13 @@ def build_recommendation(data):
             "Choose a time from 15 minutes to 3 hours in 15-minute increments."
         )
 
-    recommendations = recommend_workout(goal, level, equipment, duration)
+    recommendations = recommend_workout(
+        goal,
+        level,
+        equipment,
+        duration,
+        random_seed=random_seed,
+    )
     result = []
 
     for exercise in recommendations:
@@ -84,6 +107,8 @@ def build_recommendation(data):
         result.append({
             "id": exercise["id"],
             "name": exercise["name"],
+            "keywords": get_exercise_keywords(exercise),
+            "level": exercise["level"],
             "sets": exercise["sets"],
             "reps": exercise.get("reps"),
             "hold_seconds": exercise.get("hold_seconds"),
@@ -99,8 +124,13 @@ def build_recommendation(data):
     return result
 
 
-def save_completed_workout(data, db_path=DATABASE_NAME, user_id=None):
-    """Save checked exercises as a completed workout for one account."""
+def save_completed_workout(
+    data,
+    db_path=DATABASE_NAME,
+    user_id=None,
+    session_id=None,
+):
+    """Save completed exercise sets as a workout for one account."""
     goal = data.get("goal")
     if not isinstance(goal, str) or goal not in get_available_goals():
         raise ValueError("Choose a valid fitness goal.")
@@ -109,34 +139,157 @@ def save_completed_workout(data, db_path=DATABASE_NAME, user_id=None):
     if not isinstance(notes, str):
         raise ValueError("Workout notes must be text.")
 
-    completed_ids = data.get("completed_exercises")
-    if not isinstance(completed_ids, list) or not completed_ids:
-        raise ValueError("Mark at least one exercise as complete before saving.")
-
     exercise_by_id = {exercise["id"]: exercise for exercise in exercises}
-    if any(
-        not isinstance(exercise_id, int)
-        or isinstance(exercise_id, bool)
-        or exercise_id not in exercise_by_id
-        for exercise_id in completed_ids
-    ):
-        raise ValueError("The completed exercises contain an invalid exercise.")
-    if len(set(completed_ids)) != len(completed_ids):
-        raise ValueError("An exercise can only be recorded once per workout.")
+    if "completed_sets" in data:
+        completed_sets = data["completed_sets"]
+        if not isinstance(completed_sets, list) or not completed_sets:
+            raise ValueError("Mark at least one set as complete before saving.")
+
+        completed_records = []
+        for record in completed_sets:
+            if not isinstance(record, dict):
+                raise ValueError("The completed sets contain an invalid exercise.")
+            exercise_id = record.get("exercise_id")
+            sets_completed = record.get("sets_completed")
+            if (
+                not isinstance(exercise_id, int)
+                or isinstance(exercise_id, bool)
+                or exercise_id not in exercise_by_id
+                or not isinstance(sets_completed, int)
+                or isinstance(sets_completed, bool)
+                or sets_completed < 1
+                or sets_completed > exercise_by_id[exercise_id]["sets"]
+            ):
+                raise ValueError("The completed sets contain an invalid exercise or set count.")
+            completed_records.append((exercise_id, sets_completed))
+        if len({exercise_id for exercise_id, _ in completed_records}) != len(completed_records):
+            raise ValueError("An exercise can only be recorded once per workout.")
+    else:
+        completed_ids = data.get("completed_exercises")
+        if not isinstance(completed_ids, list) or not completed_ids:
+            raise ValueError("Mark at least one exercise as complete before saving.")
+        if any(
+            not isinstance(exercise_id, int)
+            or isinstance(exercise_id, bool)
+            or exercise_id not in exercise_by_id
+            for exercise_id in completed_ids
+        ):
+            raise ValueError("The completed exercises contain an invalid exercise.")
+        if len(set(completed_ids)) != len(completed_ids):
+            raise ValueError("An exercise can only be recorded once per workout.")
+        completed_records = [
+            (exercise_id, exercise_by_id[exercise_id]["sets"])
+            for exercise_id in completed_ids
+        ]
 
     session_data = start_workout(goal=goal, notes=notes)
-    for exercise_id in completed_ids:
+    if session_id is not None:
+        if not isinstance(session_id, str) or not session_id or len(session_id) > 128:
+            raise ValueError("Workout session ID is invalid.")
+        session_data["session_id"] = session_id
+    for exercise_id, sets_completed in completed_records:
         exercise = exercise_by_id[exercise_id]
         add_exercise(
             session_data,
             exercise,
-            sets_completed=exercise["sets"],
+            sets_completed=sets_completed,
             reps_completed=exercise.get("reps"),
             duration_minutes=exercise["duration"],
         )
 
     complete_workout(session_data)
     return save_workout(session_data, db_path, user_id=user_id)
+
+
+def recommendation_empty_message(data):
+    matching_exercises = filter_exercises(
+        data["goal"],
+        data["level"],
+        data["equipment"],
+    )
+    if matching_exercises:
+        return (
+            "Matching exercises exist, but they don't fit the "
+            "selected time. Choose more time and try again."
+        )
+    return (
+        "No exercises in the current library match all of "
+        "these selections. Try another goal or difficulty; "
+        "we won't substitute a different level or equipment."
+    )
+
+
+def build_active_workout(data, db_path=DATABASE_NAME, user_id=None):
+    """Create and persist a server-owned active workout."""
+    if not isinstance(user_id, int) or isinstance(user_id, bool) or user_id <= 0:
+        raise ValueError("User ID must be a positive integer.")
+
+    recommendation_seed = data.get("recommendation_seed")
+    if recommendation_seed is None:
+        recommendation_seed = secrets.randbits(64)
+    if (
+        not isinstance(recommendation_seed, int)
+        or isinstance(recommendation_seed, bool)
+        or not 0 <= recommendation_seed < 2**64
+    ):
+        raise ValueError("Workout recommendation seed is invalid.")
+    exercises_for_workout = build_recommendation(data, recommendation_seed)
+    if not exercises_for_workout:
+        return None
+
+    structure_mode = data.get("structure_mode", "block")
+    if structure_mode not in ("block", "stagger"):
+        raise ValueError("Choose block or stagger workout structure.")
+
+    active_workout = {
+        "version": 1,
+        "session_id": secrets.token_urlsafe(24),
+        "goal": data["goal"],
+        "level": data["level"],
+        "duration": data["duration"],
+        "equipment": data["equipment"],
+        "exercises": exercises_for_workout,
+        "structure_mode": structure_mode,
+        "completed_set_keys": [],
+        "saved": False,
+        "notes": "",
+    }
+    save_active_workout(user_id, active_workout, db_path)
+    return active_workout
+
+
+def update_active_workout_progress(active_workout, data):
+    """Validate and apply progress updates to a user's active workout."""
+    if data.get("session_id") != active_workout["session_id"]:
+        raise ValueError("This active workout has changed. Reload the page and try again.")
+
+    structure_mode = data.get("structure_mode")
+    if structure_mode not in ("block", "stagger"):
+        raise ValueError("Choose a valid workout structure.")
+
+    notes = data.get("notes", "")
+    if not isinstance(notes, str):
+        raise ValueError("Workout notes must be text.")
+
+    completed_set_keys = data.get("completed_set_keys")
+    if not isinstance(completed_set_keys, list):
+        raise ValueError("Completed sets must be a list.")
+    valid_set_keys = {
+        f"{exercise['id']}:{set_number}"
+        for exercise in active_workout["exercises"]
+        for set_number in range(1, exercise["sets"] + 1)
+    }
+    if (
+        any(not isinstance(key, str) or key not in valid_set_keys for key in completed_set_keys)
+        or len(set(completed_set_keys)) != len(completed_set_keys)
+    ):
+        raise ValueError("The completed sets don't match this workout.")
+
+    updated_workout = dict(active_workout)
+    updated_workout["structure_mode"] = structure_mode
+    updated_workout["completed_set_keys"] = completed_set_keys
+    updated_workout["notes"] = notes
+    return updated_workout
 
 
 def create_app(test_config=None):
@@ -301,9 +454,85 @@ def create_app(test_config=None):
     @authenticated_api
     def recommendations():
         try:
-            return jsonify(exercises=build_recommendation(json_body()))
+            data = json_body()
+            recommendation_seed = secrets.randbits(64)
+            workout = build_recommendation(data, recommendation_seed)
+            empty_message = recommendation_empty_message(data) if not workout else None
+            return jsonify(
+                exercises=workout,
+                empty_message=empty_message,
+                recommendation_seed=recommendation_seed,
+            )
         except ValueError as error:
             return jsonify(error=str(error)), 400
+
+    @app.get("/api/active-workout")
+    @authenticated_api
+    def active_workout():
+        try:
+            workout = get_active_workout(
+                session["user_id"],
+                app.config["DATABASE"],
+            )
+            if workout is not None:
+                for planned_exercise in workout["exercises"]:
+                    if "keywords" not in planned_exercise:
+                        source = next(
+                            (
+                                exercise for exercise in exercises
+                                if exercise["id"] == planned_exercise["id"]
+                            ),
+                            None,
+                        )
+                        if source is not None:
+                            planned_exercise["keywords"] = get_exercise_keywords(source)
+            return jsonify(active_workout=workout)
+        except sqlite3.Error:
+            return database_error()
+
+    @app.post("/api/active-workout")
+    @authenticated_api
+    def start_user_workout():
+        try:
+            data = json_body()
+            workout = build_active_workout(
+                data,
+                app.config["DATABASE"],
+                user_id=session["user_id"],
+            )
+            if workout is None:
+                return jsonify(
+                    active_workout=None,
+                    empty_message=recommendation_empty_message(data),
+                )
+            return jsonify(active_workout=workout), 201
+        except (ValueError, TypeError) as error:
+            return jsonify(error=str(error)), 400
+        except sqlite3.Error:
+            return database_error()
+
+    @app.put("/api/active-workout")
+    @authenticated_api
+    def update_user_workout():
+        try:
+            data = json_body()
+            workout = get_active_workout(
+                session["user_id"],
+                app.config["DATABASE"],
+            )
+            if workout is None:
+                return jsonify(error="There is no active workout to update."), 404
+            updated_workout = update_active_workout_progress(workout, data)
+            save_active_workout(
+                session["user_id"],
+                updated_workout,
+                app.config["DATABASE"],
+            )
+            return jsonify(active_workout=updated_workout)
+        except (ValueError, TypeError) as error:
+            return jsonify(error=str(error)), 400
+        except sqlite3.Error:
+            return database_error()
 
     @app.get("/api/history")
     @authenticated_api
@@ -336,10 +565,36 @@ def create_app(test_config=None):
     @authenticated_api
     def save_user_workout():
         try:
+            data = json_body()
+            active_workout = get_active_workout(
+                session["user_id"],
+                app.config["DATABASE"],
+            )
+            session_id = None
+            if active_workout is not None:
+                progress = update_active_workout_progress(active_workout, data)
+                completed_counts = {}
+                for key in progress["completed_set_keys"]:
+                    exercise_id, _ = key.split(":", 1)
+                    exercise_id = int(exercise_id)
+                    completed_counts[exercise_id] = completed_counts.get(exercise_id, 0) + 1
+                data = {
+                    "goal": active_workout["goal"],
+                    "completed_sets": [
+                        {"exercise_id": exercise_id, "sets_completed": sets_completed}
+                        for exercise_id, sets_completed in completed_counts.items()
+                    ],
+                    "notes": progress["notes"],
+                }
+                session_id = active_workout["session_id"]
+            elif "session_id" in data:
+                return jsonify(error="This active workout no longer exists. Reload the page."), 409
+
             session_id = save_completed_workout(
-                json_body(),
+                data,
                 app.config["DATABASE"],
                 user_id=session["user_id"],
+                session_id=session_id,
             )
         except (ValueError, TypeError) as error:
             return jsonify(error=str(error)), 400

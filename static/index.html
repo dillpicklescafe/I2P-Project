@@ -63,7 +63,7 @@
     <div id="app-content" hidden>
     <section id="page-build" class="app-page">
     <section class="intro">
-      <p class="eyebrow">YOUR BEST SELF STARTS WHEN YOU LOCK IN</p>
+      <p class="eyebrow">YOUR BEST SELF STARTS WHEN YOU <b><i>LOCK IN</i></b></p>
       <h1>Ready when you are, <span id="welcome-name">yourself.</span></h1>
     </section>
 
@@ -73,7 +73,6 @@
           <p class="eyebrow">LET'S MAKE A PLAN</p>
           <h2 id="planner-title">Build your workout</h2>
         </div>
-        <span class="step-badge">01 <span>/ 02</span></span>
       </div>
 
       <form id="planner-form" class="planner-form">
@@ -131,7 +130,6 @@
 
         <fieldset class="equipment-field">
           <legend class="field-label">Equipment you have</legend>
-          <p class="field-hint">No equipment? Leave everything unchecked.</p>
           <div id="equipment-options" class="equipment-options">
             <span class="field-hint">Loading equipment…</span>
           </div>
@@ -140,38 +138,38 @@
         <div class="form-footer">
           <p class="privacy-note"><span aria-hidden="true">✦</span> Your plan is made just for this session.</p>
           <button class="button button-primary" type="submit" id="recommend-button" disabled>
-            <span>Start workout</span><span aria-hidden="true">→</span>
+            <span>Create</span><span aria-hidden="true">→</span>
           </button>
         </div>
       </form>
       <p id="planner-message" class="status-message" role="status" aria-live="polite"></p>
     </section>
 
-    <section id="workout-section" class="workout-section" hidden aria-labelledby="workout-title">
+    <section id="workout-section" class="workout-section panel" hidden aria-labelledby="workout-title">
       <div class="section-heading workout-heading">
         <div>
-          <p class="eyebrow">BUILT AROUND YOU</p>
-          <h2 id="workout-title">Your workout</h2>
-          <p id="workout-summary" class="section-subtitle"></p>
-        </div>
-        <span id="completion-count" class="completion-count"></span>
-      </div>
-      <div id="exercise-list" class="exercise-list"></div>
-      <div id="save-panel" class="save-panel" hidden>
-        <label class="field notes-field">
-          <span class="field-label">A note for next time <span class="optional">(optional)</span></span>
-          <textarea id="workout-notes" rows="2" placeholder="How did it feel?"></textarea>
-        </label>
-        <div class="save-footer">
-          <p id="save-message" class="status-message" role="status" aria-live="polite"></p>
-          <button id="save-button" class="button button-primary" type="button" disabled>
-            <span>Save completed workout</span><span aria-hidden="true">✓</span>
-          </button>
+          <h2 id="workout-title" tabindex="-1">Your new workout plan</h2>
+          <div class="workout-preferences" aria-label="Selected workout preferences">
+            <span class="workout-tag"><strong id="workout-focus"></strong></span>
+            <span class="workout-tag"><strong id="workout-level"></strong></span>
+            <span class="workout-tag"><strong id="workout-duration"></strong></span>
+          </div>
         </div>
       </div>
-      <p id="no-results" class="empty-state" hidden>
-        No exercises fit those choices just yet. Try adding equipment or giving yourself a little more time.
-      </p>
+
+      <div class="workout-body">
+        <p id="active-workout-message" class="status-message" role="status" aria-live="polite"></p>
+
+        <div id="exercise-list" class="exercise-list"></div>
+        <p id="no-results" class="empty-state" hidden>
+          No exercises match all of those selections.
+        </p>
+      </div>
+      <div id="workout-actions" class="workout-actions" hidden>
+        <button id="start-button" class="button button-primary" type="button" hidden>
+          <span>Start</span><span aria-hidden="true">→</span>
+        </button>
+      </div>
     </section>
 
     </section>
@@ -207,5 +205,22 @@
     <span id="footer-user"><span>Small steps. Strong habits.</span></span>
     <button id="logout-button" class="logout-button" type="button" hidden>Log out</button>
   </footer>
+
+  <div id="workout-sheet" class="workout-sheet" hidden>
+    <div class="workout-sheet-backdrop" aria-hidden="true"></div>
+    <section
+      id="workout-sheet-panel"
+      class="workout-sheet-panel"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Workout"
+      aria-hidden="true"
+      tabindex="-1"
+    >
+      <button id="close-workout-sheet" class="workout-sheet-close" type="button" aria-label="Close workout window">
+        <span aria-hidden="true">×</span>
+      </button>
+    </section>
+  </div>
 </body>
 </html>

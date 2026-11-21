@@ -109,6 +109,54 @@ class RecommendationTests(unittest.TestCase):
         for exercise in results:
             self.assertEqual(exercise["level"], "intermediate")
 
+    def test_recommendations_never_relax_selected_filters(self):
+        requests = [
+            ("first_pushup", "beginner", [], 30),
+            ("upper_body_strength", "intermediate", ["dumbbells"], 30),
+            (
+                "cardio",
+                "advanced",
+                ["bar", "bench", "chair", "dumbbells", "resistance_band", "step", "wall"],
+                30,
+            ),
+        ]
+        for goal, level, equipment, duration in requests:
+            workout = recommend_workout(
+                goal,
+                level,
+                equipment,
+                duration,
+                random_seed=10,
+            )
+            for exercise in workout:
+                self.assertIn(goal, exercise["goals"])
+                self.assertEqual(exercise["level"], level)
+                self.assertTrue(set(exercise["equipment"]).issubset(equipment))
+
+        self.assertEqual(
+            recommend_workout(
+                "lower_body_strength",
+                "advanced",
+                ["bar", "bench", "chair", "dumbbells", "resistance_band", "step", "wall"],
+                180,
+            ),
+            [],
+        )
+
+    def test_selected_equipment_is_prioritized_over_bodyweight(self):
+        workout = recommend_workout(
+            "upper_body_strength",
+            "beginner",
+            ["dumbbells"],
+            30,
+            random_seed=10,
+        )
+
+        equipped_count = sum(bool(exercise["equipment"]) for exercise in workout)
+        self.assertGreater(equipped_count, 0)
+        self.assertTrue(all(exercise["equipment"] for exercise in workout[:equipped_count]))
+        self.assertTrue(all(not exercise["equipment"] for exercise in workout[equipped_count:]))
+
     def test_goal_filtering(self):
         goal = get_available_goals()[0]
         results = filter_exercises(goal, "beginner", [

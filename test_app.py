@@ -4,7 +4,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from app import build_recommendation, create_app, save_completed_workout
+from app import (
+    build_recommendation,
+    create_app,
+    get_exercise_keywords,
+    save_completed_workout,
+)
+from exercises import exercises
 from workout_storage import (
     get_user_by_id,
     get_workout_by_id,
@@ -26,7 +32,18 @@ class WorkoutUiTests(unittest.TestCase):
         self.assertTrue(result)
         self.assertTrue(all("instructions" in exercise for exercise in result))
         self.assertTrue(all("media_url" in exercise for exercise in result))
+        self.assertTrue(all(exercise["keywords"] for exercise in result))
+        self.assertTrue(all(exercise["level"] == "beginner" for exercise in result))
         self.assertTrue(all(exercise["duration"] <= 30 for exercise in result))
+
+    def test_speed_skater_has_specific_display_keywords(self):
+        speed_skater = next(
+            exercise for exercise in exercises if exercise["name"] == "Speed Skater"
+        )
+        self.assertEqual(
+            get_exercise_keywords(speed_skater),
+            ["balance", "legs", "cardio"],
+        )
 
     def test_build_recommendation_rejects_unavailable_level(self):
         with self.assertRaises(ValueError):
@@ -78,6 +95,26 @@ class WorkoutUiTests(unittest.TestCase):
                 "completed_exercises": [],
             })
 
+    def test_save_completed_workout_stores_completed_set_count(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = str(Path(temp_dir) / "workouts.db")
+            session_id = save_completed_workout({
+                "goal": "first_pushup",
+                "completed_sets": [{"exercise_id": 1, "sets_completed": 1}],
+            }, db_path)
+
+            saved_workout = get_workout_by_id(session_id, db_path)
+
+        self.assertEqual(saved_workout["exercises"][0]["exercise_id"], 1)
+        self.assertEqual(saved_workout["exercises"][0]["sets_completed"], 1)
+
+    def test_save_completed_workout_rejects_too_many_sets(self):
+        with self.assertRaises(ValueError):
+            save_completed_workout({
+                "goal": "first_pushup",
+                "completed_sets": [{"exercise_id": 1, "sets_completed": 3}],
+            })
+
     def test_accounts_and_workout_history_are_private(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             app = create_app({
@@ -113,6 +150,23 @@ class WorkoutUiTests(unittest.TestCase):
                 options["levels"]["first_pushup"],
                 ["beginner", "intermediate", "advanced"],
             )
+            unavailable = first_client.post("/api/recommendations", json={
+                "goal": "lower_body_strength",
+                "level": "advanced",
+                "equipment": [
+                    "bar",
+                    "bench",
+                    "chair",
+                    "dumbbells",
+                    "resistance_band",
+                    "step",
+                    "wall",
+                ],
+                "duration": 180,
+            })
+            self.assertEqual(unavailable.status_code, 200)
+            self.assertEqual(unavailable.get_json()["exercises"], [])
+            self.assertIn("No exercises", unavailable.get_json()["empty_message"])
 
             duplicate = second_client.post("/api/auth/register", json={
                 "username": "RUNNER_1",
@@ -158,6 +212,76 @@ class WorkoutUiTests(unittest.TestCase):
                 second_client.post("/api/recommendations", json={}).status_code,
                 401,
             )
+
+    def test_active_workout_progress_survives_logout_and_moves_to_history(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            app = create_app({
+                "TESTING": True,
+                "SECRET_KEY": "test-secret-key",
+                "DATABASE": str(Path(temp_dir) / "active-workout.db"),
+            })
+            client = app.test_client()
+            registration = client.post("/api/auth/register", json={
+                "username": "active_runner",
+                "password": "test-password-123",
+                "first_name": "Active",
+                "last_name": "Runner",
+            })
+            self.assertEqual(registration.status_code, 201)
+
+            preferences = {
+                "goal": "first_pushup",
+                "level": "beginner",
+                "equipment": [],
+                "duration": 30,
+            }
+            preview = client.post("/api/recommendations", json=preferences)
+            self.assertEqual(preview.status_code, 200)
+            preview_data = preview.get_json()
+            started = client.post("/api/active-workout", json={
+                **preferences,
+                "structure_mode": "stagger",
+                "recommendation_seed": preview_data["recommendation_seed"],
+            })
+            self.assertEqual(started.status_code, 201)
+            active_workout = started.get_json()["active_workout"]
+            self.assertEqual(
+                [exercise["id"] for exercise in active_workout["exercises"]],
+                [exercise["id"] for exercise in preview_data["exercises"]],
+            )
+            self.assertEqual(active_workout["structure_mode"], "stagger")
+            exercise_id = active_workout["exercises"][0]["id"]
+            progress = {
+                "session_id": active_workout["session_id"],
+                "structure_mode": "stagger",
+                "completed_set_keys": [f"{exercise_id}:1"],
+                "notes": "Keep going",
+            }
+            updated = client.put("/api/active-workout", json=progress)
+            self.assertEqual(updated.status_code, 200)
+
+            client.post("/api/auth/logout")
+            self.assertEqual(client.get("/api/active-workout").status_code, 401)
+            login = client.post("/api/auth/login", json={
+                "username": "active_runner",
+                "password": "test-password-123",
+            })
+            self.assertEqual(login.status_code, 200)
+            restored = client.get("/api/active-workout").get_json()["active_workout"]
+            self.assertEqual(restored["session_id"], active_workout["session_id"])
+            self.assertEqual(restored["structure_mode"], "stagger")
+            self.assertEqual(restored["completed_set_keys"], [f"{exercise_id}:1"])
+            self.assertEqual(restored["notes"], "Keep going")
+
+            saved = client.post("/api/workouts", json=progress)
+            self.assertEqual(saved.status_code, 201)
+            self.assertEqual(
+                client.get("/api/active-workout").get_json()["active_workout"],
+                None,
+            )
+            history = client.get("/api/history").get_json()
+            self.assertEqual(len(history), 1)
+            self.assertEqual(history[0]["total_sets"], 1)
 
     def test_existing_user_table_migrates_name_columns(self):
         with tempfile.TemporaryDirectory() as temp_dir:

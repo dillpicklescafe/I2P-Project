@@ -2851,6 +2851,7 @@ exercises = [
     {
         "id": 118,
         "name": "Speed Skater",
+        "keywords": ["balance", "legs", "cardio"],
         "body_area": ["legs", "glutes", "full_body"],
         "goals": ["cardio", "coordination"],
         "type": "cardio",
