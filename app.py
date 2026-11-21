@@ -450,6 +450,40 @@ def create_app(test_config=None):
             equipment=get_available_equipment(),
         )
 
+    @app.get("/api/library")
+    @authenticated_api
+    def exercise_library():
+        library_exercises = []
+        targets = []
+        for exercise in exercises:
+            media = get_exercise_media(exercise["id"])
+            media_url = None
+            media_type = None
+            if media and (STATIC_DIR / media["media_path"]).is_file():
+                media_url = "/static/" + media["media_path"].replace("\\", "/")
+                media_type = media["media_type"]
+
+            library_exercises.append({
+                "id": exercise["id"],
+                "name": exercise["name"],
+                "body_area": exercise["body_area"],
+                "equipment": exercise["equipment"],
+                "type": exercise["type"],
+                "media_url": media_url,
+                "media_type": media_type,
+            })
+            for target in exercise["body_area"]:
+                if target not in targets:
+                    targets.append(target)
+            if exercise["type"] == "cardio" and "cardio" not in targets:
+                targets.append("cardio")
+
+        return jsonify(
+            exercises=library_exercises,
+            equipment=get_available_equipment(),
+            targets=targets,
+        )
+
     @app.post("/api/recommendations")
     @authenticated_api
     def recommendations():

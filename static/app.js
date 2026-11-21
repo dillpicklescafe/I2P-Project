@@ -12,9 +12,20 @@ const workoutSection = document.querySelector("#workout-section");
 const exerciseList = document.querySelector("#exercise-list");
 const workoutActions = document.querySelector("#workout-actions");
 const startButton = document.querySelector("#start-button");
+const continueWorkoutButton = document.querySelector("#continue-workout-button");
 const workoutSheet = document.querySelector("#workout-sheet");
 const workoutSheetPanel = document.querySelector("#workout-sheet-panel");
 const closeWorkoutSheetButton = document.querySelector("#close-workout-sheet");
+const activeStepAnimation = document.querySelector("#active-step-animation");
+const workoutProgress = document.querySelector("#workout-progress");
+const activeStepPosition = document.querySelector("#active-step-position");
+const activeSetCounter = document.querySelector("#active-set-counter");
+const activeExerciseTitle = document.querySelector("#active-exercise-title");
+const activeExerciseKeywords = document.querySelector("#active-exercise-keywords");
+const activeStepPrescription = document.querySelector("#active-step-prescription");
+const workoutStepCarousel = document.querySelector("#workout-step-carousel");
+const completeStepButton = document.querySelector("#complete-step-button");
+const activeStepMessage = document.querySelector("#active-step-message");
 const activeWorkoutMessage = document.querySelector("#active-workout-message");
 const historyList = document.querySelector("#history-list");
 const historyMessage = document.querySelector("#history-message");
@@ -31,14 +42,30 @@ const authSwitchCopy = document.querySelector("#auth-switch-copy");
 const authSwitchLink = document.querySelector("#auth-switch-link");
 const logoutButton = document.querySelector("#logout-button");
 const appContent = document.querySelector("#app-content");
+const workoutThumbnailFrames = new Map();
 const welcomeName = document.querySelector("#welcome-name");
 const appNav = document.querySelector("#app-nav");
+const librarySearchInput = document.querySelector("#library-search");
+const libraryEquipmentFilters = document.querySelector("#library-equipment-filters");
+const libraryTargetFilters = document.querySelector("#library-target-filters");
+const libraryStatus = document.querySelector("#library-status");
+const libraryResultCount = document.querySelector("#library-result-count");
+const libraryExerciseGrid = document.querySelector("#library-exercise-grid");
+const libraryEmpty = document.querySelector("#library-empty");
 let currentGoal = "";
 let currentLevel = "";
 let currentEquipment = [];
 let currentExercises = [];
 let currentDuration = 0;
 let currentRecommendationSeed = null;
+let workoutSteps = [];
+let currentWorkoutStepIndex = 0;
+let completedWorkoutSteps = new Set();
+let libraryExercises = [];
+let libraryLoaded = false;
+let libraryLoading = false;
+const selectedLibraryEquipment = new Set();
+const selectedLibraryTargets = new Set();
 let authMode = "login";
 
 function openWorkoutSheet() {
@@ -149,6 +176,13 @@ function selectGoal(goal) {
 
 async function requestJson(url, options) {
   const response = await fetch(url, options);
+  const contentType = response.headers.get("content-type") || "";
+  if (!contentType.includes("application/json")) {
+    const message = response.status === 404
+      ? "The server does not recognize this API route. Restart Flask to load the latest changes."
+      : `The server returned an unexpected response (${response.status}). Please try again.`;
+    throw new Error(message);
+  }
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || "Something went wrong. Please try again.");
   return data;
@@ -206,6 +240,205 @@ function isValidStoredWorkout(workout, availableGoals) {
     && typeof workout.notes === "string";
 }
 
+function buildWorkoutSteps(exercises) {
+  return exercises.flatMap((exercise, exerciseIndex) =>
+    Array.from({ length: exercise.sets }, (_, setIndex) => ({
+      exercise,
+      exerciseIndex,
+      setNumber: setIndex + 1,
+      key: `${exercise.id}:${setIndex + 1}`,
+    }))
+  );
+}
+
+function createExerciseMedia(
+  exercise,
+  mediaClass = "exercise-media",
+  placeholderClass = "media-placeholder",
+  autoplay = false,
+  controls = true
+) {
+  if (exercise.media_url && exercise.media_type === "mp4") {
+    const video = makeElement("video", mediaClass);
+    video.controls = controls;
+    video.muted = true;
+    video.loop = true;
+    video.playsInline = true;
+    video.autoplay = autoplay;
+    video.preload = autoplay ? "auto" : "metadata";
+    video.addEventListener("loadedmetadata", () => {
+      video.classList.toggle("is-portrait", video.videoHeight > video.videoWidth);
+    });
+    const source = makeElement("source");
+    source.src = exercise.media_url;
+    source.type = "video/mp4";
+    video.append(source);
+    return video;
+  }
+  if (exercise.media_url) {
+    const image = makeElement("img", mediaClass);
+    image.src = exercise.media_url;
+    image.alt = `${exercise.name} demonstration`;
+    return image;
+  }
+  return makeElement("div", placeholderClass, "Demo coming soon");
+}
+
+function renderCurrentWorkoutStep(message = "") {
+  const step = workoutSteps[currentWorkoutStepIndex];
+  if (!step) return;
+
+  const { exercise, exerciseIndex, setNumber } = step;
+  activeStepPosition.textContent = `Exercise ${exerciseIndex + 1} of ${currentExercises.length}`;
+  activeSetCounter.textContent = `Set ${setNumber} of ${exercise.sets}`;
+  activeExerciseTitle.textContent = `of ${exercise.name}`;
+  activeExerciseKeywords.textContent = (exercise.keywords || [])
+    .map(prettyLabel)
+    .join(" · ");
+
+  activeStepPrescription.replaceChildren();
+  let prescription = "";
+  if (exercise.reps !== null) prescription = `${exercise.reps} reps`;
+  else if (exercise.hold_seconds !== null) prescription = `${exercise.hold_seconds}s hold`;
+  else if (exercise.work_seconds !== null) prescription = `${exercise.work_seconds}s work`;
+  if (prescription) activeStepPrescription.append(makeElement("li", "", prescription));
+  if (Number.isFinite(exercise.rest_seconds) && exercise.rest_seconds > 0) {
+    activeStepPrescription.append(makeElement("li", "", `${exercise.rest_seconds}s rest between sets`));
+  }
+
+  activeStepAnimation.replaceChildren(
+    createExerciseMedia(exercise, "active-exercise-media", "active-step-placeholder", true)
+  );
+  const isComplete = completedWorkoutSteps.has(step.key);
+  completeStepButton.textContent = isComplete ? "Mark set incomplete" : "Complete set";
+  activeStepMessage.textContent = message;
+  renderWorkoutProgress();
+}
+
+function renderWorkoutProgress() {
+  workoutProgress.replaceChildren(...workoutSteps.map((step, index) => {
+    const segment = makeElement("span", "workout-progress-segment");
+    segment.setAttribute("aria-hidden", "true");
+    segment.classList.toggle("is-complete", completedWorkoutSteps.has(step.key));
+    segment.classList.toggle("is-current", index === currentWorkoutStepIndex);
+    return segment;
+  }));
+  workoutProgress.setAttribute("aria-valuemax", String(workoutSteps.length));
+  workoutProgress.setAttribute("aria-valuenow", String(completedWorkoutSteps.size));
+  renderWorkoutStepCarousel();
+}
+
+function createExerciseThumbnail(exercise, mediaClass, placeholderClass) {
+  if (!exercise.media_url) {
+    return makeElement("div", placeholderClass, "Demo coming soon");
+  }
+  if (exercise.media_type !== "gif" && exercise.media_type !== "mp4") {
+    return createExerciseMedia(
+      exercise,
+      mediaClass,
+      placeholderClass,
+      false,
+      false
+    );
+  }
+
+  const thumbnail = makeElement("img", mediaClass);
+  thumbnail.alt = `${exercise.name} demonstration preview`;
+  let framePromise = workoutThumbnailFrames.get(exercise.media_url);
+  if (!framePromise) {
+    framePromise = new Promise((resolve, reject) => {
+      const isVideo = exercise.media_type === "mp4";
+      const source = isVideo ? document.createElement("video") : new Image();
+      source.addEventListener(isVideo ? "loadeddata" : "load", () => {
+        const width = isVideo ? source.videoWidth : source.naturalWidth;
+        const height = isVideo ? source.videoHeight : source.naturalHeight;
+        if (!width || !height) {
+          reject(new Error(`Could not read thumbnail dimensions for ${exercise.name}.`));
+          return;
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext("2d");
+        if (!context) {
+          reject(new Error("Could not create a canvas to capture the exercise thumbnail."));
+          return;
+        }
+
+        try {
+          context.drawImage(source, 0, 0, width, height);
+          resolve({ src: canvas.toDataURL("image/png"), isPortrait: height > width });
+        } catch (error) {
+          reject(error);
+        } finally {
+          if (isVideo) {
+            source.pause();
+            source.removeAttribute("src");
+            source.load();
+          }
+        }
+      }, { once: true });
+      source.addEventListener("error", () => {
+        reject(new Error(`Could not load thumbnail media for ${exercise.name}.`));
+      }, { once: true });
+      if (isVideo) {
+        source.muted = true;
+        source.preload = "auto";
+        source.playsInline = true;
+      }
+      source.src = exercise.media_url;
+      if (isVideo) source.load();
+    });
+    workoutThumbnailFrames.set(exercise.media_url, framePromise);
+  }
+
+  framePromise.then(({ src, isPortrait }) => {
+    thumbnail.src = src;
+    thumbnail.classList.toggle("is-portrait", isPortrait);
+  }).catch((error) => {
+    console.error(`Unable to create a static thumbnail for ${exercise.name}.`, error);
+  });
+  return thumbnail;
+}
+
+function renderWorkoutStepCarousel() {
+  workoutStepCarousel.replaceChildren(...workoutSteps.map((step, index) => {
+    const completed = completedWorkoutSteps.has(step.key);
+    const thumbnail = makeElement("button", "workout-step-thumbnail");
+    thumbnail.type = "button";
+    thumbnail.classList.toggle("is-current", index === currentWorkoutStepIndex);
+    thumbnail.classList.toggle("is-complete", completed);
+    thumbnail.setAttribute("aria-current", index === currentWorkoutStepIndex ? "step" : "false");
+    thumbnail.setAttribute(
+      "aria-label",
+      `${step.exercise.name}, set ${step.setNumber}${completed ? ", completed" : ""}`
+    );
+
+    thumbnail.append(createExerciseThumbnail(
+      step.exercise,
+      "workout-step-thumbnail-media",
+      "workout-step-thumbnail-placeholder"
+    ));
+    const details = makeElement("span", "workout-step-thumbnail-details");
+    details.append(
+      makeElement("span", "workout-step-thumbnail-name", step.exercise.name),
+      makeElement("span", "workout-step-thumbnail-set", `Set ${step.setNumber}`)
+    );
+    thumbnail.append(details);
+    thumbnail.append(makeElement("span", "workout-step-thumbnail-check", completed ? "✓" : ""));
+    thumbnail.addEventListener("click", () => {
+      currentWorkoutStepIndex = index;
+      renderCurrentWorkoutStep();
+    });
+    return thumbnail;
+  }));
+  const currentThumbnail = workoutStepCarousel.querySelector(".is-current");
+  if (currentThumbnail) {
+    currentThumbnail.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+  }
+}
+
 function renderActiveWorkout(workout, statusMessage) {
   const availableGoals = [...goalOptions.querySelectorAll(".goal-card")]
     .map((card) => card.dataset.goal);
@@ -219,6 +452,15 @@ function renderActiveWorkout(workout, statusMessage) {
   currentEquipment = workout.equipment;
   currentExercises = workout.exercises;
   currentDuration = workout.duration;
+  workoutSteps = buildWorkoutSteps(currentExercises);
+  const validStepKeys = new Set(workoutSteps.map((step) => step.key));
+  completedWorkoutSteps = new Set(
+    workout.completed_set_keys.filter((key) => validStepKeys.has(key))
+  );
+  currentWorkoutStepIndex = workoutSteps.findIndex(
+    (step) => !completedWorkoutSteps.has(step.key)
+  );
+  if (currentWorkoutStepIndex === -1) currentWorkoutStepIndex = 0;
   selectGoal(workout.goal);
   durationSelect.value = String(workout.duration);
   document.querySelectorAll('input[name="level"]').forEach((input) => {
@@ -232,35 +474,19 @@ function renderActiveWorkout(workout, statusMessage) {
   document.querySelector("#workout-duration").textContent = `${workout.duration} minutes`;
   workoutActions.hidden = false;
   startButton.hidden = true;
+  continueWorkoutButton.hidden = false;
   document.querySelector("#no-results").hidden = true;
   workoutSection.hidden = false;
   activeWorkoutMessage.textContent = statusMessage;
   activeWorkoutMessage.className = "status-message success";
   renderExercises();
+  renderCurrentWorkoutStep();
   workoutSection.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function renderExercise(exercise) {
   const card = makeElement("article", "exercise-card");
-  if (exercise.media_url && exercise.media_type === "mp4") {
-    const video = makeElement("video", "exercise-media");
-    video.controls = true;
-    video.muted = true;
-    video.loop = true;
-    video.playsInline = true;
-    const source = makeElement("source");
-    source.src = exercise.media_url;
-    source.type = "video/mp4";
-    video.append(source);
-    card.append(video);
-  } else if (exercise.media_url) {
-    const image = makeElement("img", "exercise-media");
-    image.src = exercise.media_url;
-    image.alt = `${exercise.name} demonstration`;
-    card.append(image);
-  } else {
-    card.append(makeElement("div", "media-placeholder", "Demo coming soon"));
-  }
+  card.append(createExerciseMedia(exercise));
 
   const content = makeElement("div", "exercise-content");
   const heading = makeElement("div", "exercise-top");
@@ -307,10 +533,32 @@ function renderExercises() {
   exerciseList.replaceChildren(...currentExercises.map(renderExercise));
 }
 
+completeStepButton.addEventListener("click", () => {
+  const step = workoutSteps[currentWorkoutStepIndex];
+  if (!step) return;
+
+  if (completedWorkoutSteps.has(step.key)) {
+    completedWorkoutSteps.delete(step.key);
+    renderCurrentWorkoutStep("Set marked incomplete.");
+    return;
+  }
+
+  completedWorkoutSteps.add(step.key);
+  const hasNextStep = currentWorkoutStepIndex < workoutSteps.length - 1;
+  if (hasNextStep) currentWorkoutStepIndex += 1;
+  const message = completedWorkoutSteps.size === workoutSteps.length
+    ? "All workout sets are complete."
+    : hasNextStep ? "Set completed. Moving to the next set." : "Set completed.";
+  renderCurrentWorkoutStep(message);
+});
+
 function renderEmptyWorkout(goal, level, duration, message) {
   currentGoal = goal;
   currentExercises = [];
   currentDuration = duration;
+  workoutSteps = [];
+  currentWorkoutStepIndex = 0;
+  completedWorkoutSteps.clear();
   document.querySelector("#workout-focus").textContent = prettyLabel(goal);
   document.querySelector("#workout-level").textContent = prettyLabel(level);
   document.querySelector("#workout-duration").textContent = `${duration} minutes`;
@@ -321,6 +569,7 @@ function renderEmptyWorkout(goal, level, duration, message) {
   workoutSection.hidden = false;
   workoutActions.hidden = true;
   startButton.hidden = true;
+  continueWorkoutButton.hidden = true;
   activeWorkoutMessage.textContent = "";
   workoutSection.scrollIntoView({ behavior: "smooth", block: "start" });
 }
@@ -403,6 +652,99 @@ async function loadOptions() {
   }
 }
 
+function renderLibraryFilterOptions(container, options, selectedValues) {
+  container.replaceChildren(...options.map((option) => {
+    const button = makeElement("button", "library-filter-chip", option.label);
+    button.type = "button";
+    button.setAttribute("aria-pressed", String(selectedValues.has(option.value)));
+    button.classList.toggle("is-selected", selectedValues.has(option.value));
+    button.addEventListener("click", () => {
+      if (selectedValues.has(option.value)) selectedValues.delete(option.value);
+      else selectedValues.add(option.value);
+      button.classList.toggle("is-selected", selectedValues.has(option.value));
+      button.setAttribute("aria-pressed", String(selectedValues.has(option.value)));
+      filterLibraryExercises();
+    });
+    return button;
+  }));
+}
+
+function renderLibraryExercise(exercise) {
+  const card = makeElement("article", "library-exercise-card");
+  card.append(createExerciseThumbnail(
+    exercise,
+    "library-exercise-media",
+    "library-exercise-placeholder"
+  ));
+  card.append(makeElement("h3", "library-exercise-title", exercise.name));
+  return card;
+}
+
+function matchesLibraryEquipment(exercise) {
+  if (selectedLibraryEquipment.size === 0) return true;
+
+  const availableEquipment = new Set(
+    [...selectedLibraryEquipment].filter((item) => item !== "__no_equipment__")
+  );
+  if (exercise.equipment.length === 0) {
+    return availableEquipment.size > 0 || selectedLibraryEquipment.has("__no_equipment__");
+  }
+  return exercise.equipment.every((item) => availableEquipment.has(item));
+}
+
+function filterLibraryExercises() {
+  const query = librarySearchInput.value.trim().toLowerCase();
+  const filteredExercises = libraryExercises.filter((exercise) => {
+    const matchesName = exercise.name.toLowerCase().includes(query);
+    const matchesEquipment = matchesLibraryEquipment(exercise);
+    const matchesTarget = selectedLibraryTargets.size === 0
+      || [...selectedLibraryTargets].some((target) => (
+        target === "cardio"
+          ? exercise.type === "cardio"
+          : exercise.body_area.includes(target)
+      ));
+    return matchesName && matchesEquipment && matchesTarget;
+  });
+
+  libraryResultCount.textContent = `${filteredExercises.length} ${
+    filteredExercises.length === 1 ? "exercise" : "exercises"
+  }`;
+  libraryExerciseGrid.replaceChildren(...filteredExercises.map(renderLibraryExercise));
+  libraryEmpty.hidden = filteredExercises.length > 0;
+}
+
+async function loadLibrary() {
+  if (libraryLoaded || libraryLoading) return;
+  libraryLoading = true;
+  libraryStatus.textContent = "Loading exercises…";
+  try {
+    const data = await requestJson("/api/library");
+    libraryExercises = data.exercises;
+    const equipmentOptions = data.equipment.map((item) => ({ value: item, label: prettyLabel(item) }));
+    equipmentOptions.push({ value: "__no_equipment__", label: "No equipment" });
+    renderLibraryFilterOptions(
+      libraryEquipmentFilters,
+      equipmentOptions,
+      selectedLibraryEquipment
+    );
+    renderLibraryFilterOptions(
+      libraryTargetFilters,
+      data.targets.map((target) => ({
+        value: target,
+        label: target === "core" ? "Abs / Core" : prettyLabel(target),
+      })),
+      selectedLibraryTargets
+    );
+    libraryLoaded = true;
+    libraryStatus.textContent = "";
+    filterLibraryExercises();
+  } catch (error) {
+    libraryStatus.textContent = error.message;
+  } finally {
+    libraryLoading = false;
+  }
+}
+
 async function loadActiveWorkout() {
   try {
     const data = await requestJson("/api/active-workout");
@@ -446,6 +788,7 @@ function showPage(pageName) {
     else link.removeAttribute("aria-current");
   });
   if (pageName === "tracker") loadHistory();
+  if (pageName === "library") loadLibrary();
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -503,6 +846,8 @@ appNav.addEventListener("click", (event) => {
   if (link) showPage(link.dataset.pageTarget);
 });
 
+librarySearchInput.addEventListener("input", filterLibraryExercises);
+
 authForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   authSubmit.disabled = true;
@@ -541,9 +886,14 @@ logoutButton.addEventListener("click", async () => {
     currentExercises = [];
     currentDuration = 0;
     currentRecommendationSeed = null;
+    workoutSteps = [];
+    currentWorkoutStepIndex = 0;
+    completedWorkoutSteps.clear();
+    closeWorkoutSheet();
     workoutSection.hidden = true;
     workoutActions.hidden = true;
     startButton.hidden = true;
+    continueWorkoutButton.hidden = true;
     exerciseList.replaceChildren();
     activeWorkoutMessage.textContent = "";
     historyList.replaceChildren(makeElement("p", "field-hint", "Log in to see your saved workouts."));
@@ -588,11 +938,15 @@ document.querySelector("#planner-form").addEventListener("submit", async (event)
     currentExercises = data.exercises;
     currentDuration = duration;
     currentRecommendationSeed = data.recommendation_seed;
+    workoutSteps = [];
+    currentWorkoutStepIndex = 0;
+    completedWorkoutSteps.clear();
     document.querySelector("#workout-focus").textContent = prettyLabel(currentGoal);
     document.querySelector("#workout-level").textContent = prettyLabel(level);
     document.querySelector("#workout-duration").textContent = `${duration} minutes`;
     workoutActions.hidden = false;
     startButton.hidden = false;
+    continueWorkoutButton.hidden = true;
     document.querySelector("#no-results").hidden = true;
     workoutSection.hidden = false;
     activeWorkoutMessage.textContent = "";
@@ -632,5 +986,7 @@ startButton.addEventListener("click", async () => {
     startButton.disabled = false;
   }
 });
+
+continueWorkoutButton.addEventListener("click", openWorkoutSheet);
 
 checkSession();

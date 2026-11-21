@@ -45,6 +45,37 @@ class WorkoutUiTests(unittest.TestCase):
             ["balance", "legs", "cardio"],
         )
 
+    def test_exercise_library_returns_filterable_catalog_for_authenticated_users(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            app = create_app({
+                "TESTING": True,
+                "SECRET_KEY": "test-secret-key",
+                "DATABASE": str(Path(temp_dir) / "library.db"),
+            })
+            client = app.test_client()
+            self.assertEqual(client.get("/api/library").status_code, 401)
+
+            registration = client.post("/api/auth/register", json={
+                "username": "library_user",
+                "password": "test-password-123",
+                "first_name": "Library",
+                "last_name": "User",
+            })
+            self.assertEqual(registration.status_code, 201)
+
+            response = client.get("/api/library")
+            self.assertEqual(response.status_code, 200)
+            data = response.get_json()
+            self.assertEqual(len(data["exercises"]), len(exercises))
+            self.assertIn("dumbbells", data["equipment"])
+            self.assertIn("core", data["targets"])
+            self.assertIn("cardio", data["targets"])
+            self.assertTrue(all(
+                {"id", "name", "body_area", "equipment", "type", "media_url", "media_type"}
+                <= exercise.keys()
+                for exercise in data["exercises"]
+            ))
+
     def test_build_recommendation_rejects_unavailable_level(self):
         with self.assertRaises(ValueError):
             build_recommendation({

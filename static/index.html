@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#f5f6f2">
+  <meta name="theme-color" content="#24201a">
   <title>LockIn — Your workout, your pace</title>
   <link rel="stylesheet" href="/static/app.css">
   <script src="/static/app.js" defer></script>
@@ -169,13 +169,44 @@
         <button id="start-button" class="button button-primary" type="button" hidden>
           <span>Start</span><span aria-hidden="true">→</span>
         </button>
+        <button id="continue-workout-button" class="button button-primary" type="button" hidden>
+          <span>Continue workout</span><span aria-hidden="true">→</span>
+        </button>
       </div>
     </section>
 
     </section>
 
-    <section id="page-library" class="app-page placeholder-page" hidden aria-labelledby="library-title">
-      <h1 id="library-title">Exercise Library</h1>
+    <section id="page-library" class="app-page library-page" hidden aria-labelledby="library-title">
+      <header class="library-header">
+        <p class="eyebrow">FIND YOUR NEXT MOVE</p>
+        <h1 id="library-title">Exercise Library</h1>
+        <p>Browse exercises by name, equipment, or target.</p>
+      </header>
+      <section class="library-controls panel" aria-label="Exercise filters">
+        <label class="library-search-field" for="library-search">
+          <span class="field-label">Search by exercise name</span>
+          <span class="library-search-box">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"></circle><path d="m16 16 5 5"></path></svg>
+            <input id="library-search" type="search" placeholder="Search exercises">
+          </span>
+        </label>
+        <div class="library-filter-group">
+          <h2 id="library-equipment-title">Equipment</h2>
+          <div id="library-equipment-filters" class="library-filter-options" role="group" aria-labelledby="library-equipment-title"></div>
+        </div>
+        <div class="library-filter-group">
+          <h2 id="library-target-title">Target</h2>
+          <div id="library-target-filters" class="library-filter-options" role="group" aria-labelledby="library-target-title"></div>
+        </div>
+      </section>
+      <p id="library-status" class="status-message" role="status" aria-live="polite"></p>
+      <div class="library-results-heading">
+        <h2>Exercises</h2>
+        <p id="library-result-count" aria-live="polite"></p>
+      </div>
+      <div id="library-exercise-grid" class="library-exercise-grid"></div>
+      <p id="library-empty" class="empty-state library-empty" hidden>No exercises match these filters.</p>
     </section>
 
     <section id="page-tracker" class="app-page" hidden>
@@ -220,6 +251,32 @@
       <button id="close-workout-sheet" class="workout-sheet-close" type="button" aria-label="Close workout window">
         <span aria-hidden="true">×</span>
       </button>
+      <div
+        id="workout-progress"
+        class="workout-progress"
+        role="progressbar"
+        aria-label="Workout sets completed"
+        aria-valuemin="0"
+        aria-valuemax="0"
+        aria-valuenow="0"
+      ></div>
+      <div class="active-workout-view">
+        <div class="active-step-layout">
+          <div id="active-step-animation" class="active-step-animation"></div>
+          <div id="active-step-content" class="active-step-content" aria-live="polite" aria-atomic="true">
+            <p id="active-step-position" class="eyebrow"></p>
+            <p id="active-set-counter" class="active-set-counter"></p>
+            <h2 id="active-exercise-title" class="active-exercise-title"></h2>
+            <p id="active-exercise-keywords" class="exercise-keywords"></p>
+            <ul id="active-step-prescription" class="active-step-prescription"></ul>
+          </div>
+        </div>
+        <div class="active-step-controls">
+          <button id="complete-step-button" class="button button-primary" type="button">Complete set</button>
+        </div>
+        <p id="active-step-message" class="status-message" role="status" aria-live="polite"></p>
+        <div id="workout-step-carousel" class="workout-step-carousel" role="group" aria-label="Workout sets"></div>
+      </div>
     </section>
   </div>
 </body>
