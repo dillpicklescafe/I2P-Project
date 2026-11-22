@@ -326,7 +326,7 @@ video.exercise-media.is-portrait { object-fit: contain; }
 .workout-step-thumbnail-check { position: absolute; top: 10px; right: 10px; width: 19px; height: 19px; display: grid; place-items: center; border-radius: 50%; color: var(--ink); background: var(--green); font-size: 12px; font-weight: 700; opacity: 0; }
 .workout-step-thumbnail.is-complete .workout-step-thumbnail-check { opacity: 1; }
 
-.planner.panel, .workout-section.panel, .library-controls.panel, .workout-sheet-panel {
+.planner.panel, .workout-section.panel, .library-controls.panel, .auth-panel.panel, .workout-sheet-panel {
   --ink: #24201a;
   --muted: #3f2548;
   --green-dark: #3f2548;
@@ -335,8 +335,8 @@ video.exercise-media.is-portrait { object-fit: contain; }
   --paper: #f5f4f0;
   color: var(--ink);
 }
-.planner .button-primary, .workout-section .button-primary, .workout-sheet-panel .button-primary { color: #c8c793; }
-.planner .button:disabled, .workout-section .button:disabled, .workout-sheet-panel .button:disabled { color: #c8c793; }
+.planner .button-primary, .workout-section .button-primary, .auth-panel .button-primary, .workout-sheet-panel .button-primary { color: #c8c793; }
+.planner .button:disabled, .workout-section .button:disabled, .auth-panel .button:disabled, .workout-sheet-panel .button:disabled { color: #c8c793; }
 .planner .goal-card:hover, .planner .goal-card.is-selected { color: #c8c793; background: #3f2548; }
 .planner .goal-image-placeholder { color: #c8c793; }
 .planner .level-option input:checked + span,
