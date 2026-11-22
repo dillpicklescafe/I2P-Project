@@ -210,6 +210,54 @@
     </section>
 
     <section id="page-tracker" class="app-page" hidden>
+
+      <section class="stats-section panel" aria-labelledby="stats-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">YOUR CONSISTENCY</p>
+            <h2 id="stats-title">Workout statistics</h2>
+            <p id="stats-period-label" class="field-hint">Your progress this week</p>
+          </div>
+          <select id="stats-period" aria-label="Statistics period">
+            <option value="week">This week</option>
+            <option value="month">This month</option>
+          </select>
+        </div>
+
+        <p id="stats-message" class="status-message" role="status"></p>
+
+        <div class="stats-grid">
+          <article class="stat-card">
+            <span class="stat-label">Workout sessions</span>
+            <strong id="stat-sessions">0</strong>
+            <span class="stat-description">Completed workouts</span>
+          </article>
+
+          <article class="stat-card">
+            <span class="stat-label">Active days</span>
+            <strong id="stat-days">0</strong>
+            <span class="stat-description">Days you showed up</span>
+          </article>
+
+          <article class="stat-card">
+            <span class="stat-label">Total time</span>
+            <strong id="stat-minutes">0</strong>
+            <span class="stat-description">Minutes of exercise</span>
+          </article>
+
+          <article class="stat-card">
+            <span class="stat-label">Completed sets</span>
+            <strong id="stat-sets">0</strong>
+            <span class="stat-description">Sets you've finished</span>
+          </article>
+        </div>
+
+        <div class="stats-activity">
+          <h3>Activity overview</h3>
+          <p class="field-hint">Your completed workouts by day</p>
+          <div id="stats-chart" class="stats-chart"></div>
+        </div>
+      </section>
     <section class="history-section" aria-labelledby="history-title">
       <div class="section-heading">
         <div>
@@ -272,8 +320,14 @@
           </div>
         </div>
         <div class="active-step-controls">
-          <button id="complete-step-button" class="button button-primary" type="button">Complete set</button>
-        </div>
+  <button id="complete-step-button" class="button button-primary" type="button">
+    Complete set
+  </button>
+
+  <button id="finish-workout-button" class="button button-primary" type="button" hidden>
+    Finish workout
+  </button>
+</div>
         <p id="active-step-message" class="status-message" role="status" aria-live="polite"></p>
         <div id="workout-step-carousel" class="workout-step-carousel" role="group" aria-label="Workout sets"></div>
       </div>
