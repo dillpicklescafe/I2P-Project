@@ -18,12 +18,6 @@
       <button class="nav-link is-active" type="button" data-page-target="build" aria-current="page">Build workout</button>
       <button class="nav-link" type="button" data-page-target="library">Exercise Library</button>
       <button class="nav-link" type="button" data-page-target="tracker">Workout Tracker</button>
-      <button class="nav-link profile-link" type="button" data-page-target="profile" aria-label="Profile" title="Profile">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <circle cx="12" cy="8" r="3.5"></circle>
-          <path d="M5.5 20c.5-3.5 2.8-5.5 6.5-5.5s6 2 6.5 5.5"></path>
-        </svg>
-      </button>
     </nav>
   </header>
 
@@ -222,8 +216,8 @@
             <p id="stats-period-label" class="field-hint">Your progress this week</p>
           </div>
           <select id="stats-period" aria-label="Statistics period">
-            <option value="week">This week</option>
-            <option value="month">This month</option>
+            <option value="week">Weekly</option>
+            <option value="month">Monthly (this year)</option>
           </select>
         </div>
 
@@ -257,7 +251,7 @@
 
         <div class="stats-activity">
           <h3>Activity overview</h3>
-          <p class="field-hint">Your completed workouts by day</p>
+          <p id="stats-activity-label" class="field-hint">Your completed workouts by day of the week</p>
           <div id="stats-chart" class="stats-chart"></div>
         </div>
       </section>
@@ -286,9 +280,6 @@
     </section>
     </section>
 
-    <section id="page-profile" class="app-page placeholder-page" hidden aria-labelledby="profile-title">
-      <h1 id="profile-title">Profile</h1>
-    </section>
     </div>
   </main>
 
@@ -297,6 +288,24 @@
     <span id="footer-user"><span>Small steps. Strong habits.</span></span>
     <button id="logout-button" class="logout-button" type="button" hidden>Log out</button>
   </footer>
+
+  <dialog
+    id="new-workout-confirm-dialog"
+    class="new-workout-confirm-dialog"
+    aria-labelledby="new-workout-confirm-title"
+  >
+    <h2 id="new-workout-confirm-title">Start a new workout?</h2>
+    <p>Your current workout and completed sets will be saved in History so you can resume it later.</p>
+    <p id="new-workout-confirm-message" class="new-workout-confirm-message" role="status" aria-live="polite"></p>
+    <div class="new-workout-confirm-actions">
+      <button id="cancel-new-workout-button" class="button button-secondary" type="button" autofocus>
+        Cancel
+      </button>
+      <button id="confirm-new-workout-button" class="button button-primary" type="button">
+        Yes, save and create new
+      </button>
+    </div>
+  </dialog>
 
   <div id="workout-sheet" class="workout-sheet" hidden>
     <div class="workout-sheet-backdrop" aria-hidden="true"></div>

@@ -516,7 +516,7 @@ from datetime import date, timedelta
 
 
 def get_workout_stats(period="week", db_path=DATABASE_NAME, user_id=None):
-    """Return workout totals and daily activity for the current week or month."""
+    """Return weekly daily totals or year-to-date monthly activity."""
     if period not in ("week", "month"):
         raise ValueError("Period must be 'week' or 'month'.")
 
@@ -526,11 +526,8 @@ def get_workout_stats(period="week", db_path=DATABASE_NAME, user_id=None):
         start_date = today - timedelta(days=today.weekday())
         end_date = start_date + timedelta(days=7)
     else:
-        start_date = today.replace(day=1)
-        if today.month == 12:
-            end_date = date(today.year + 1, 1, 1)
-        else:
-            end_date = date(today.year, today.month + 1, 1)
+        start_date = date(today.year, 1, 1)
+        end_date = today + timedelta(days=1)
 
     initialize_database(db_path)
 
@@ -558,18 +555,38 @@ def get_workout_stats(period="week", db_path=DATABASE_NAME, user_id=None):
               AND date(w.date) < date(?)
         """ + user_filter, parameters).fetchone()
 
-        activity = connection.execute("""
+        activity_date = (
+            "date(w.date)"
+            if period == "week"
+            else "strftime('%Y-%m-01', date(w.date))"
+        )
+        activity = connection.execute(f"""
             SELECT
-                date(w.date) AS workout_date,
+                {activity_date} AS workout_date,
                 COUNT(DISTINCT w.session_id) AS sessions
             FROM workouts w
             WHERE w.completed = 1
               AND date(w.date) >= date(?)
               AND date(w.date) < date(?)
-        """ + user_filter + """
-            GROUP BY date(w.date)
-            ORDER BY date(w.date)
+        """ + user_filter + f"""
+            GROUP BY {activity_date}
+            ORDER BY {activity_date}
         """, parameters).fetchall()
+
+    sessions_by_date = {
+        row["workout_date"]: row["sessions"]
+        for row in activity
+    }
+    if period == "week":
+        activity_dates = [
+            start_date + timedelta(days=offset)
+            for offset in range(7)
+        ]
+    else:
+        activity_dates = [
+            date(today.year, month, 1)
+            for month in range(1, 13)
+        ]
 
     return {
         "period": period,
@@ -581,9 +598,9 @@ def get_workout_stats(period="week", db_path=DATABASE_NAME, user_id=None):
         "total_sets": totals["total_sets"],
         "activity": [
             {
-                "date": row["workout_date"],
-                "sessions": row["sessions"],
+                "date": activity_date.isoformat(),
+                "sessions": sessions_by_date.get(activity_date.isoformat(), 0),
             }
-            for row in activity
+            for activity_date in activity_dates
         ],
     }

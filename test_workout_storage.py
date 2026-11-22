@@ -1,6 +1,10 @@
+from datetime import date
 import unittest
 import tempfile
 import os
+import sqlite3
+from contextlib import closing
+from unittest.mock import patch
 
 from workout_log import (
     start_workout,
@@ -12,7 +16,8 @@ from workout_storage import (
     initialize_database,
     save_workout,
     get_workout_history,
-    get_workout_by_id
+    get_workout_by_id,
+    get_workout_stats,
 )
 
 
@@ -103,6 +108,55 @@ class WorkoutStorageTests(unittest.TestCase):
         )
 
         self.assertIsNone(result)
+
+    def test_stats_return_weekdays_and_monthly_buckets(self):
+        workouts = [
+            ("monday", "2026-11-23"),
+            ("sunday", "2026-11-29"),
+            ("march", "2026-03-15"),
+            ("november", "2026-11-22"),
+            ("last_year", "2025-12-31"),
+        ]
+        with closing(sqlite3.connect(self.db_path)) as connection:
+            with connection:
+                connection.executemany("""
+                    INSERT INTO workouts (session_id, date, goal, completed)
+                    VALUES (?, ?, 'cardio', 1)
+                """, workouts)
+
+        class FixedDate(date):
+            @classmethod
+            def today(cls):
+                return cls(2026, 11, 23)
+
+        with patch("workout_storage.date", FixedDate):
+            weekly = get_workout_stats("week", self.db_path)
+            monthly = get_workout_stats("month", self.db_path)
+
+        self.assertEqual(
+            [bucket["date"] for bucket in weekly["activity"]],
+            [
+                "2026-11-23",
+                "2026-11-24",
+                "2026-11-25",
+                "2026-11-26",
+                "2026-11-27",
+                "2026-11-28",
+                "2026-11-29",
+            ],
+        )
+        self.assertEqual(
+            [bucket["sessions"] for bucket in weekly["activity"]],
+            [1, 0, 0, 0, 0, 0, 1],
+        )
+        self.assertEqual(weekly["total_sessions"], 2)
+        self.assertEqual(len(monthly["activity"]), 12)
+        self.assertEqual(monthly["activity"][2]["date"], "2026-03-01")
+        self.assertEqual(monthly["activity"][2]["sessions"], 1)
+        self.assertEqual(monthly["activity"][10]["date"], "2026-11-01")
+        self.assertEqual(monthly["activity"][10]["sessions"], 2)
+        self.assertEqual(monthly["total_sessions"], 3)
+        self.assertEqual(monthly["end_date"], "2026-11-23")
 
     def test_incomplete_workout_rejected(self):
         incomplete = start_workout(goal="cardio")

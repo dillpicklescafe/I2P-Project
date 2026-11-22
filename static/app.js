@@ -4,10 +4,15 @@ const goalTrigger = document.querySelector("#goal-trigger");
 const goalPopover = document.querySelector("#goal-popover");
 const goalOptions = document.querySelector("#goal-options");
 const goalSelected = document.querySelector("#goal-selected");
+const plannerForm = document.querySelector("#planner-form");
 const durationSelect = document.querySelector("#duration");
 const equipmentOptions = document.querySelector("#equipment-options");
 const recommendButton = document.querySelector("#recommend-button");
 const plannerMessage = document.querySelector("#planner-message");
+const newWorkoutConfirmDialog = document.querySelector("#new-workout-confirm-dialog");
+const newWorkoutConfirmMessage = document.querySelector("#new-workout-confirm-message");
+const confirmNewWorkoutButton = document.querySelector("#confirm-new-workout-button");
+const cancelNewWorkoutButton = document.querySelector("#cancel-new-workout-button");
 const workoutSection = document.querySelector("#workout-section");
 const exerciseList = document.querySelector("#exercise-list");
 const workoutActions = document.querySelector("#workout-actions");
@@ -76,6 +81,8 @@ let completedWorkoutSteps = new Set();
 let currentWorkoutSessionId = null;
 let currentWorkoutStructureMode = "block";
 let currentWorkoutNotes = "";
+let pendingNewWorkoutAction = null;
+let pendingWorkoutToPause = null;
 let libraryExercises = [];
 let libraryLoaded = false;
 let libraryLoading = false;
@@ -226,7 +233,11 @@ async function requestJson(url, options) {
     throw new Error(message);
   }
   const data = await response.json();
-  if (!response.ok) throw new Error(data.error || "Something went wrong. Please try again.");
+  if (!response.ok) {
+    const error = new Error(data.error || "Something went wrong. Please try again.");
+    error.status = response.status;
+    throw error;
+  }
   return data;
 }
 
@@ -420,36 +431,15 @@ function populateExercisePreview(container, exercise, titleId) {
 }
 
 const exercisePreviewHoverQuery = window.matchMedia("(hover: hover) and (pointer: fine)");
-let exercisePreviewOpenTimer = null;
-let exercisePreviewCloseTimer = null;
-let exercisePreviewHideTimer = null;
 let activeExercisePreviewTrigger = null;
-let activeExercisePreviewData = null;
 let exercisePreviewReturnFocus = null;
 
-function clearExercisePreviewTimers() {
-  window.clearTimeout(exercisePreviewOpenTimer);
-  window.clearTimeout(exercisePreviewCloseTimer);
-  window.clearTimeout(exercisePreviewHideTimer);
-  exercisePreviewOpenTimer = null;
-  exercisePreviewCloseTimer = null;
-  exercisePreviewHideTimer = null;
-}
-
-function closeExerciseHoverPreview(immediate = false) {
-  clearExercisePreviewTimers();
+function closeExerciseHoverPreview() {
   exerciseHoverPreview.classList.remove("is-visible");
   exerciseHoverPreview.setAttribute("aria-hidden", "true");
-  const finishClosing = () => {
-    if (exerciseHoverPreview.classList.contains("is-visible")) return;
-    exerciseHoverPreview.hidden = true;
-    exerciseHoverPreviewContent.replaceChildren();
-    activeExercisePreviewTrigger = null;
-    activeExercisePreviewData = null;
-    exercisePreviewHideTimer = null;
-  };
-  if (immediate || exerciseHoverPreview.hidden) finishClosing();
-  else exercisePreviewHideTimer = window.setTimeout(finishClosing, 180);
+  exerciseHoverPreview.hidden = true;
+  exerciseHoverPreviewContent.replaceChildren();
+  activeExercisePreviewTrigger = null;
 }
 
 function positionExerciseHoverPreview() {
@@ -484,9 +474,7 @@ function positionExerciseHoverPreview() {
 
 function showExerciseHoverPreview(trigger, exercise) {
   if (exercisePreviewDialog.open) return;
-  clearExercisePreviewTimers();
   activeExercisePreviewTrigger = trigger;
-  activeExercisePreviewData = exercise;
   exerciseHoverPreview.hidden = false;
   exerciseHoverPreview.setAttribute("aria-hidden", "false");
   exerciseHoverPreview.setAttribute(
@@ -503,41 +491,17 @@ function showExerciseHoverPreview(trigger, exercise) {
   exerciseHoverPreview.classList.add("is-visible");
 }
 
-function scheduleExerciseHoverPreview(trigger, exercise) {
-  window.clearTimeout(exercisePreviewOpenTimer);
-  window.clearTimeout(exercisePreviewCloseTimer);
-  if (
-    !exerciseHoverPreview.hidden
-    && exerciseHoverPreview.classList.contains("is-visible")
-    && activeExercisePreviewTrigger === trigger
-  ) return;
-
-  exercisePreviewOpenTimer = window.setTimeout(
-    () => showExerciseHoverPreview(trigger, exercise),
-    250
-  );
-}
-
-function scheduleExerciseHoverPreviewClose() {
-  window.clearTimeout(exercisePreviewCloseTimer);
-  exercisePreviewCloseTimer = window.setTimeout(() => {
-    const triggerHovered = activeExercisePreviewTrigger
-      && activeExercisePreviewTrigger.matches(":hover");
-    const triggerFocused = activeExercisePreviewTrigger
-      && activeExercisePreviewTrigger.contains(document.activeElement);
-    if (
-      !triggerHovered
-      && !triggerFocused
-      && !exerciseHoverPreview.matches(":hover")
-    ) {
-      closeExerciseHoverPreview();
-    }
-  }, 220);
+function updateExerciseHoverPreviewPosition() {
+  if (exerciseHoverPreview.hidden || !activeExercisePreviewTrigger) return;
+  if (!activeExercisePreviewTrigger.matches(":hover")) {
+    closeExerciseHoverPreview();
+    return;
+  }
+  positionExerciseHoverPreview();
 }
 
 function openExercisePreviewDialog(trigger, exercise) {
-  clearExercisePreviewTimers();
-  closeExerciseHoverPreview(true);
+  closeExerciseHoverPreview();
   exercisePreviewReturnFocus = trigger;
   populateExercisePreview(
     exercisePreviewDialogContent,
@@ -556,16 +520,12 @@ function attachExercisePreview(card, exercise) {
 
   card.addEventListener("pointerenter", (event) => {
     if (exercisePreviewHoverQuery.matches && event.pointerType !== "touch") {
-      scheduleExerciseHoverPreview(card, exercise);
+      showExerciseHoverPreview(card, exercise);
     }
   });
   card.addEventListener("pointerleave", () => {
-    if (exercisePreviewHoverQuery.matches) scheduleExerciseHoverPreviewClose();
+    if (exercisePreviewHoverQuery.matches) closeExerciseHoverPreview();
   });
-  card.addEventListener("focusin", () => {
-    showExerciseHoverPreview(card, exercise);
-  });
-  card.addEventListener("focusout", scheduleExerciseHoverPreviewClose);
   card.addEventListener("click", () => {
     if (!exercisePreviewDialog.open) openExercisePreviewDialog(card, exercise);
   });
@@ -576,23 +536,6 @@ function attachExercisePreview(card, exercise) {
   });
 }
 
-exerciseHoverPreview.addEventListener("pointerenter", () => {
-  window.clearTimeout(exercisePreviewCloseTimer);
-  window.clearTimeout(exercisePreviewHideTimer);
-  exercisePreviewCloseTimer = null;
-  exercisePreviewHideTimer = null;
-  exerciseHoverPreview.classList.add("is-visible");
-  exerciseHoverPreview.setAttribute("aria-hidden", "false");
-});
-exerciseHoverPreview.addEventListener("pointerleave", scheduleExerciseHoverPreviewClose);
-exerciseHoverPreview.addEventListener("click", () => {
-  if (activeExercisePreviewTrigger && activeExercisePreviewData) {
-    openExercisePreviewDialog(
-      activeExercisePreviewTrigger,
-      activeExercisePreviewData
-    );
-  }
-});
 exercisePreviewCloseButton.addEventListener("click", () => {
   exercisePreviewDialog.close();
 });
@@ -618,8 +561,8 @@ document.addEventListener("keydown", (event) => {
     closeExerciseHoverPreview();
   }
 });
-window.addEventListener("resize", positionExerciseHoverPreview);
-window.addEventListener("scroll", positionExerciseHoverPreview, true);
+window.addEventListener("resize", updateExerciseHoverPreviewPosition);
+window.addEventListener("scroll", updateExerciseHoverPreviewPosition, true);
 
 function renderCurrentWorkoutStep(message = "") {
   const step = workoutSteps[currentWorkoutStepIndex];
@@ -638,9 +581,15 @@ function renderCurrentWorkoutStep(message = "") {
   if (exercise.reps !== null) prescription = `${exercise.reps} reps`;
   else if (exercise.hold_seconds !== null) prescription = `${exercise.hold_seconds}s hold`;
   else if (exercise.work_seconds !== null) prescription = `${exercise.work_seconds}s work`;
-  if (prescription) activeStepPrescription.append(makeElement("li", "", prescription));
+  if (prescription) {
+    activeStepPrescription.append(makeElement("li", "active-step-main-prescription", prescription));
+  }
   if (Number.isFinite(exercise.rest_seconds) && exercise.rest_seconds > 0) {
-    activeStepPrescription.append(makeElement("li", "", `${exercise.rest_seconds}s rest between sets`));
+    activeStepPrescription.append(makeElement(
+      "li",
+      "active-step-rest",
+      `${exercise.rest_seconds}s rest between sets`
+    ));
   }
 
   activeStepAnimation.replaceChildren(
@@ -654,9 +603,7 @@ function renderCurrentWorkoutStep(message = "") {
   finishWorkoutButton.hidden = !workoutComplete;
   workoutCompletionOverlay.hidden = !workoutComplete;
   workoutSheetPanel.classList.toggle("workout-complete", workoutComplete);
-  workoutCompletionMessage.textContent = workoutComplete
-    ? message || "All sets are complete. Progress is saved."
-    : "";
+  workoutCompletionMessage.textContent = workoutComplete ? message : "";
   activeStepMessage.textContent = workoutComplete ? "" : message;
   renderWorkoutProgress();
   if (shouldFocusFinishButton) finishWorkoutButton.focus();
@@ -786,7 +733,7 @@ function renderWorkoutStepCarousel() {
   }
 }
 
-function renderActiveWorkout(workout, statusMessage) {
+function renderActiveWorkout(workout) {
   const availableGoals = [...goalOptions.querySelectorAll(".goal-card")]
     .map((card) => card.dataset.goal);
   if (!isValidStoredWorkout(workout, availableGoals)) {
@@ -827,9 +774,10 @@ function renderActiveWorkout(workout, statusMessage) {
   saveAndClearButton.hidden = false;
   continueWorkoutButton.hidden = false;
   document.querySelector("#no-results").hidden = true;
+  workoutSection.classList.add("is-in-progress");
   workoutSection.hidden = false;
-  activeWorkoutMessage.textContent = statusMessage;
-  activeWorkoutMessage.className = "status-message success";
+  activeWorkoutMessage.textContent = "";
+  activeWorkoutMessage.className = "status-message";
   renderExercises();
   renderCurrentWorkoutStep();
   workoutSection.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -837,6 +785,7 @@ function renderActiveWorkout(workout, statusMessage) {
 
 function hideGeneratedWorkout() {
   workoutSection.hidden = true;
+  workoutSection.classList.remove("is-in-progress");
   workoutActions.hidden = true;
   startButton.hidden = true;
   saveAndClearButton.hidden = true;
@@ -853,6 +802,31 @@ function hideGeneratedWorkout() {
   workoutCompletionOverlay.hidden = true;
   workoutSheetPanel.classList.remove("workout-complete");
   activeWorkoutMessage.textContent = "";
+}
+
+async function pauseWorkout(workout) {
+  if (!workout || typeof workout.session_id !== "string" || !workout.session_id) {
+    throw new Error("There is no active workout to save.");
+  }
+  await requestJson("/api/active-workout/pause", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      session_id: workout.session_id,
+      structure_mode: workout.structure_mode || "block",
+      completed_set_keys: Array.isArray(workout.completed_set_keys)
+        ? workout.completed_set_keys
+        : [],
+      notes: workout.notes || "",
+    }),
+  });
+}
+
+function promptToReplaceWorkout(action, workout) {
+  pendingNewWorkoutAction = action;
+  pendingWorkoutToPause = workout;
+  newWorkoutConfirmMessage.textContent = "";
+  newWorkoutConfirmDialog.showModal();
 }
 
 function renderExercise(exercise) {
@@ -947,13 +921,7 @@ completeStepButton.addEventListener("click", async () => {
       })
     });
 
-    const message = completedWorkoutSteps.size === workoutSteps.length
-      ? "All workout sets are complete. Progress saved!"
-      : completedWorkoutSteps.has(step.key)
-        ? "Set completed. Progress saved!"
-        : "Set marked incomplete. Progress saved!";
-
-    renderCurrentWorkoutStep(message);
+    renderCurrentWorkoutStep();
 
   } catch (error) {
     // Restore the previous state if saving fails.
@@ -992,7 +960,6 @@ finishWorkoutButton.addEventListener("click", async () => {
 
     currentWorkoutSessionId = null;
     hideGeneratedWorkout();
-    plannerMessage.textContent = "Workout completed and saved to your history.";
 
     closeWorkoutSheet();
 
@@ -1106,7 +1073,6 @@ function renderHistory(history) {
 
         await loadActiveWorkout();
 
-        historyMessage.textContent = "Your previous workout is ready to redo!";
       } catch (error) {
         historyMessage.textContent = error.message;
       } finally {
@@ -1171,7 +1137,7 @@ function renderPausedWorkouts(workouts) {
           { method: "POST" }
         );
         showPage("build");
-        renderActiveWorkout(result.active_workout, "Unfinished workout resumed.");
+        renderActiveWorkout(result.active_workout);
         openWorkoutSheet();
         await loadPausedWorkouts();
       } catch (error) {
@@ -1205,7 +1171,11 @@ async function loadStats(period = "week") {
     const stats = await requestJson(`/api/stats?period=${period}`);
 
     document.querySelector("#stats-period-label").textContent =
-      period === "week" ? "Your progress this week" : "Your progress this month";
+      period === "week" ? "Your progress this week" : "Your progress this year";
+    document.querySelector("#stats-activity-label").textContent =
+      period === "week"
+        ? "Your completed workouts by day of the week"
+        : "Your completed workouts by month";
 
     document.querySelector("#stat-sessions").textContent =
       stats.total_sessions;
@@ -1228,30 +1198,35 @@ async function loadStats(period = "week") {
       return;
     }
 
-    const maxSessions = Math.max(
-      ...stats.activity.map(day => day.sessions),
-      1
-    );
+    const maxSessions = Math.max(...stats.activity.map(bucket => bucket.sessions), 1);
 
-    stats.activity.forEach(day => {
+    stats.activity.forEach(bucket => {
       const barContainer = document.createElement("div");
       barContainer.className = "stats-bar-item";
 
       const bar = document.createElement("div");
       bar.className = "stats-bar";
 
-      bar.style.height =
-        `${Math.max((day.sessions / maxSessions) * 100, 5)}%`;
+      if (bucket.sessions === 0) {
+        bar.style.height = "0";
+        bar.style.minHeight = "0";
+      } else {
+        bar.style.height = `${Math.max((bucket.sessions / maxSessions) * 100, 5)}%`;
+      }
 
-      bar.title = `${day.sessions} workout(s)`;
+      bar.title = `${bucket.sessions} workout(s)`;
 
       const label = document.createElement("span");
       label.className = "stats-bar-label";
-      label.textContent = day.date.slice(5);
+      const [year, month, day] = bucket.date.split("-").map(Number);
+      const bucketDate = new Date(year, month - 1, day);
+      label.textContent = period === "week"
+        ? bucketDate.toLocaleDateString(undefined, { weekday: "short" })
+        : bucketDate.toLocaleDateString(undefined, { month: "short" });
 
       const count = document.createElement("span");
       count.className = "stats-bar-count";
-      count.textContent = day.sessions;
+      count.textContent = bucket.sessions;
 
       barContainer.append(count, bar, label);
       chart.appendChild(barContainer);
@@ -1378,10 +1353,7 @@ async function loadActiveWorkout() {
   try {
     const data = await requestJson("/api/active-workout");
     if (data.active_workout) {
-      renderActiveWorkout(
-        data.active_workout,
-        ""
-      );
+      renderActiveWorkout(data.active_workout);
     }
   } catch (error) {
     plannerMessage.textContent = error.message;
@@ -1559,7 +1531,7 @@ logoutButton.addEventListener("click", async () => {
   }
 });
 
-document.querySelector("#planner-form").addEventListener("submit", async (event) => {
+plannerForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   plannerMessage.textContent = "";
   if (!goalSelect.value) {
@@ -1569,6 +1541,21 @@ document.querySelector("#planner-form").addEventListener("submit", async (event)
   }
   recommendButton.disabled = true;
   try {
+    if (currentWorkoutSessionId) {
+      promptToReplaceWorkout("create", {
+        session_id: currentWorkoutSessionId,
+        structure_mode: currentWorkoutStructureMode,
+        completed_set_keys: [...completedWorkoutSteps],
+        notes: currentWorkoutNotes,
+      });
+      return;
+    }
+    const active = await requestJson("/api/active-workout");
+    if (active.active_workout) {
+      promptToReplaceWorkout("create", active.active_workout);
+      return;
+    }
+
     const duration = Number(durationSelect.value);
     const level = document.querySelector('input[name="level"]:checked').value;
     const data = await requestJson("/api/recommendations", {
@@ -1614,28 +1601,105 @@ document.querySelector("#planner-form").addEventListener("submit", async (event)
   }
 });
 
+async function startActiveWorkoutFromPlan() {
+  const data = await requestJson("/api/active-workout", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      goal: currentGoal,
+      level: currentLevel,
+      equipment: currentEquipment,
+      duration: currentDuration,
+      recommendation_seed: currentRecommendationSeed,
+    }),
+  });
+  if (!data.active_workout) {
+    plannerMessage.textContent = data.empty_message;
+    return;
+  }
+  renderActiveWorkout(data.active_workout);
+  openWorkoutSheet();
+}
+
+cancelNewWorkoutButton.addEventListener("click", () => {
+  newWorkoutConfirmDialog.close();
+});
+
+newWorkoutConfirmDialog.addEventListener("close", () => {
+  pendingNewWorkoutAction = null;
+  pendingWorkoutToPause = null;
+});
+
+newWorkoutConfirmDialog.addEventListener("click", (event) => {
+  if (event.target === newWorkoutConfirmDialog && !confirmNewWorkoutButton.disabled) {
+    newWorkoutConfirmDialog.close();
+  }
+});
+
+newWorkoutConfirmDialog.addEventListener("cancel", (event) => {
+  if (confirmNewWorkoutButton.disabled) event.preventDefault();
+});
+
+confirmNewWorkoutButton.addEventListener("click", async () => {
+  confirmNewWorkoutButton.disabled = true;
+  cancelNewWorkoutButton.disabled = true;
+  newWorkoutConfirmMessage.textContent = "Saving your current workout...";
+  const action = pendingNewWorkoutAction;
+  const workout = pendingWorkoutToPause;
+  try {
+    if (!action || !workout) {
+      throw new Error("There is no active workout to save.");
+    }
+    await pauseWorkout(workout);
+  } catch (error) {
+    newWorkoutConfirmMessage.textContent = error.message;
+    confirmNewWorkoutButton.disabled = false;
+    cancelNewWorkoutButton.disabled = false;
+    return;
+  }
+
+  await loadPausedWorkouts();
+  newWorkoutConfirmDialog.close();
+  confirmNewWorkoutButton.disabled = false;
+  cancelNewWorkoutButton.disabled = false;
+  if (action === "create") {
+    hideGeneratedWorkout();
+    plannerForm.requestSubmit();
+  } else if (action === "start") {
+    startButton.disabled = true;
+    try {
+      await startActiveWorkoutFromPlan();
+    } catch (error) {
+      plannerMessage.textContent = error.message;
+    } finally {
+      startButton.disabled = false;
+    }
+  }
+});
+
 startButton.addEventListener("click", async () => {
   startButton.disabled = true;
   plannerMessage.textContent = "";
   try {
-    const data = await requestJson("/api/active-workout", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        goal: currentGoal,
-        level: currentLevel,
-        equipment: currentEquipment,
-        duration: currentDuration,
-        recommendation_seed: currentRecommendationSeed,
-      }),
-    });
-    if (!data.active_workout) {
-      plannerMessage.textContent = data.empty_message;
+    const active = await requestJson("/api/active-workout");
+    if (active.active_workout) {
+      promptToReplaceWorkout("start", active.active_workout);
       return;
     }
-    renderActiveWorkout(data.active_workout, "Workout started and saved.");
-    openWorkoutSheet();
+    await startActiveWorkoutFromPlan();
   } catch (error) {
+    if (error.status === 409) {
+      try {
+        const active = await requestJson("/api/active-workout");
+        if (active.active_workout) {
+          promptToReplaceWorkout("start", active.active_workout);
+          return;
+        }
+      } catch (activeWorkoutError) {
+        plannerMessage.textContent = activeWorkoutError.message;
+        return;
+      }
+    }
     plannerMessage.textContent = error.message;
   } finally {
     startButton.disabled = false;
@@ -1654,18 +1718,13 @@ saveAndClearButton.addEventListener("click", async () => {
   saveAndClearButton.textContent = "Saving...";
   plannerMessage.textContent = "";
   try {
-    await requestJson("/api/active-workout/pause", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        session_id: currentWorkoutSessionId,
-        structure_mode: currentWorkoutStructureMode,
-        completed_set_keys: [...completedWorkoutSteps],
-        notes: currentWorkoutNotes,
-      }),
+    await pauseWorkout({
+      session_id: currentWorkoutSessionId,
+      structure_mode: currentWorkoutStructureMode,
+      completed_set_keys: [...completedWorkoutSteps],
+      notes: currentWorkoutNotes,
     });
     hideGeneratedWorkout();
-    plannerMessage.textContent = "Unfinished workout saved. Resume it from History.";
     document.querySelector("#planner-title").focus();
     await loadPausedWorkouts();
   } catch (error) {

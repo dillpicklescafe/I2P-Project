@@ -393,6 +393,17 @@ class WorkoutUiTests(unittest.TestCase):
             })
             self.assertEqual(second_pause.status_code, 201)
 
+            third_started = client.post("/api/active-workout", json=start_payload)
+            self.assertEqual(third_started.status_code, 201)
+            third_workout = third_started.get_json()["active_workout"]
+            third_pause = client.post("/api/active-workout/pause", json={
+                "session_id": third_workout["session_id"],
+                "structure_mode": third_workout["structure_mode"],
+                "completed_set_keys": [],
+                "notes": "",
+            })
+            self.assertEqual(third_pause.status_code, 201)
+
             resumed = client.post(
                 f"/api/paused-workouts/{paused_candidate['session_id']}/resume"
             )
@@ -402,8 +413,13 @@ class WorkoutUiTests(unittest.TestCase):
                 progress["completed_set_keys"],
             )
             self.assertEqual(
-                client.get("/api/paused-workouts").get_json()["paused_workouts"][0]["session_id"],
-                second_workout["session_id"],
+                {
+                    workout["session_id"]
+                    for workout in client.get(
+                        "/api/paused-workouts"
+                    ).get_json()["paused_workouts"]
+                },
+                {second_workout["session_id"], third_workout["session_id"]},
             )
 
     def test_existing_user_table_migrates_name_columns(self):
