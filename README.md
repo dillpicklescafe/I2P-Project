@@ -23,9 +23,8 @@ local demonstrations. Mark completed exercises and save them to your account's
 history in the local `fitness_tracker.db` database.
 
 After logging in, use the top navigation to switch between Build workout,
-Exercise Library, Workout Tracker, and Profile. Exercise cards in the generated
-plan and Exercise Library offer detailed previews by hover, click, or keyboard;
-the Profile page remains a placeholder for future work.
+Exercise Library, Workout Tracker, and Profile. The Exercise Library and
+Profile pages are placeholders for future work.
 
 Passwords are stored as one-way hashes, and each workout is associated with its
 account. Existing workout rows from before accounts were added remain in the

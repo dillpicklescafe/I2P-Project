@@ -5,8 +5,6 @@ to the Flask static directory. Each non-RepDB entry includes its own source,
 license, and attribution metadata.
 """
 
-from pathlib import Path
-
 REPDB_ATTRIBUTION = "Exercise data by RepDB (https://repdb.co)"
 REPDB_LICENSE_URL = "https://github.com/RepDB/exercise-dataset/blob/main/LICENSE-DATA.md"
 
@@ -685,98 +683,12 @@ EXERCISE_MEDIA.update({
  75: {'lockin_name': 'Diamond Push-up', 'match_type': 'manually_provided_reviewed', 'media_path': 'exercises/75.gif', 'media_type': 'gif', 'source_provider': 'User-provided', 'source_url': None, 'license_name': 'Unknown / not provided', 'license_url': None, 'attribution': None, 'warning': 'Movement reviewed against LockIn instructions; reuse license has not been provided.'}
 })
 
-# User-provided replacements reviewed against the current exercise
-# instructions. The reuse licenses have not been provided.
-EXERCISE_MEDIA.update({
- 103: {'lockin_name': 'Bear Crawl Hold', 'match_type': 'manually_provided_reviewed', 'media_path': 'exercises/103-replacement.gif', 'media_type': 'gif', 'source_provider': 'User-provided', 'source_url': None, 'license_name': 'Unknown / not provided', 'license_url': None, 'attribution': None, 'warning': 'Replacement reviewed against LockIn instructions; reuse license has not been provided.'},
- 124: {'lockin_name': 'Clock Reach', 'match_type': 'manually_provided_reviewed', 'media_path': 'exercises/124-replacement.gif', 'media_type': 'gif', 'source_provider': 'User-provided', 'source_url': None, 'license_name': 'Unknown / not provided', 'license_url': None, 'attribution': None, 'warning': 'Replacement reviewed against LockIn instructions; reuse license has not been provided.'},
-})
-
 # Replacement reviewed frame-by-frame: both cross-body sides are demonstrated,
 # both legs and feet remain complete, and the final frame matches the first.
 EXERCISE_MEDIA.update({
  151: {'lockin_name': 'Seated Cross-body Pattern', 'match_type': 'manually_provided_reviewed', 'media_path': 'exercises/151-replacement.gif', 'media_type': 'gif', 'source_provider': 'User-provided', 'source_url': None, 'license_name': 'Unknown / not provided', 'license_url': None, 'attribution': None, 'warning': 'Replacement reviewed against LockIn instructions; old 151.gif is intentionally preserved but not mapped. Reuse license has not been provided.'}
 })
 
-# Existing repository GIF reviewed across its complete six-frame loop. The
-# instructor maintains a high plank while the shoulders shift a small distance
-# forward of the wrists and back; the ribs, hips, camera, and anatomy remain
-# stable throughout.
-EXERCISE_MEDIA.update({
- 168: {'lockin_name': 'Push-up Plank Weight Shift', 'match_type': 'manually_provided_reviewed', 'media_path': 'exercises/168.gif', 'media_type': 'gif', 'source_provider': 'User-provided', 'source_url': None, 'license_name': 'Unknown / not provided', 'license_url': None, 'attribution': None, 'warning': 'Movement reviewed against LockIn instructions; reuse license has not been provided.'}
-})
-
-# Approved static fallback illustrations are deliberately separate from the
-# animated demonstration mapping. Each image shows one visually reviewed key
-# position; it must not be presented as an animated or complete demonstration.
-STATIC_EXERCISE_IMAGES = {
- 128: {'lockin_name': 'Front-to-Back Weight Shift', 'media_path': 'exercises/128-front-to-back-weight-shift.jpg', 'media_type': 'jpg', 'representation_kind': 'static_key_position', 'key_position': 'Forward ankle-driven weight shift with the body straight and feet grounded.'},
- 152: {'lockin_name': 'Seated Pattern Flow', 'media_path': 'exercises/152-seated-pattern-flow.jpg', 'media_type': 'jpg', 'representation_kind': 'static_key_position', 'key_position': 'Seated cross-body knee reach on a stable chair.'},
- 153: {'lockin_name': 'Single-leg Balance Reach Flow', 'media_path': 'exercises/153-single-leg-balance-reach-flow.jpg', 'media_type': 'jpg', 'representation_kind': 'static_key_position', 'key_position': 'Single-leg balance with the free foot reaching laterally.'},
- 154: {'lockin_name': 'Tempo Push-up with Pause', 'media_path': 'exercises/154-tempo-push-up-with-pause.jpg', 'media_type': 'jpg', 'representation_kind': 'static_key_position', 'key_position': 'Paused bottom push-up position with the body aligned.'},
- 155: {'lockin_name': 'Single-leg Squat to Knee Drive', 'media_path': 'exercises/155-single-leg-squat-to-knee-drive.jpg', 'media_type': 'jpg', 'representation_kind': 'static_key_position', 'key_position': 'Balanced knee-drive endpoint after the shallow single-leg squat.'},
- 156: {'lockin_name': 'Dynamic Mobility Flow', 'media_path': 'exercises/156-dynamic-mobility-flow.jpg', 'media_type': 'jpg', 'representation_kind': 'static_key_position', 'key_position': 'Reverse lunge with the torso rotated toward the front leg.'},
- 157: {'lockin_name': 'Complex Mobility Flow', 'media_path': 'exercises/157-complex-mobility-flow.jpg', 'media_type': 'jpg', 'representation_kind': 'static_key_position', 'key_position': 'Hands-down position with the front leg briefly straightened.'},
- 158: {'lockin_name': 'Controlled Recovery Flow', 'media_path': 'exercises/158-controlled-recovery-flow.jpg', 'media_type': 'jpg', 'representation_kind': 'static_key_position', 'key_position': 'Comfortable half-split position from half-kneeling.'},
- 159: {'lockin_name': 'Deep Recovery Flow', 'media_path': 'exercises/159-deep-recovery-flow.jpg', 'media_type': 'jpg', 'representation_kind': 'static_key_position', 'key_position': 'Half-kneeling hip stretch with gentle rotation toward the front leg.'},
- 160: {'lockin_name': 'Prone Posture Control Flow', 'media_path': 'exercises/160-prone-posture-control-flow.jpg', 'media_type': 'jpg', 'representation_kind': 'static_key_position', 'key_position': 'Prone W-arm position with shoulder blades drawn down.'},
- 161: {'lockin_name': 'Low-impact Squat and Reach', 'media_path': 'exercises/161-low-impact-squat-and-reach.jpg', 'media_type': 'jpg', 'representation_kind': 'static_key_position', 'key_position': 'Shallow heels-down squat with both arms reaching forward.'},
- 162: {'lockin_name': 'Seated Mobility Reach Matrix', 'media_path': 'exercises/162-seated-mobility-reach-matrix.jpg', 'media_type': 'jpg', 'representation_kind': 'static_key_position', 'key_position': 'Seated diagonal-overhead reach with gentle upper-back rotation.'},
- 163: {'lockin_name': 'Seated Guard and Toe-tap Sequence', 'media_path': 'exercises/163-seated-guard-and-toe-tap-sequence.jpg', 'media_type': 'jpg', 'representation_kind': 'static_key_position', 'key_position': 'Forward hand reach paired with the opposite light toe tap.'},
- 164: {'lockin_name': 'Ninety-ninety Hip Switch', 'media_path': 'exercises/164-ninety-ninety-hip-switch.jpg', 'media_type': 'jpg', 'representation_kind': 'static_key_position', 'key_position': 'Tall seated ninety-ninety hip-switch endpoint.'},
- 165: {'lockin_name': 'Supine Recovery Rotation', 'media_path': 'exercises/165-supine-recovery-rotation.jpg', 'media_type': 'jpg', 'representation_kind': 'static_key_position', 'key_position': 'Supine knees-to-one-side rotation with shoulders grounded.'},
- 166: {'lockin_name': 'Kneeling Lat and Side-body Flow', 'media_path': 'exercises/166-kneeling-lat-and-side-body-flow.jpg', 'media_type': 'jpg', 'representation_kind': 'static_key_position', 'key_position': 'Hips toward heels with both hands walked to one side.'},
- 167: {'lockin_name': 'Eccentric Push-up Lowering', 'media_path': 'exercises/167-eccentric-push-up-lowering.jpg', 'media_type': 'jpg', 'representation_kind': 'static_key_position', 'key_position': 'Late controlled push-up lowering with elbows angled back.'},
- 169: {'lockin_name': 'Seated Direction-change Drill', 'media_path': 'exercises/169-seated-direction-change-drill.jpg', 'media_type': 'jpg', 'representation_kind': 'static_key_position', 'key_position': 'Tall seated cross-body reach.'},
- 170: {'lockin_name': 'Seated Core Bracing Matrix', 'media_path': 'exercises/170-seated-core-bracing-matrix.jpg', 'media_type': 'jpg', 'representation_kind': 'static_key_position', 'key_position': 'Slight seated lean with both arms diagonal while resisting rotation.'},
- 172: {'lockin_name': 'Squat Thrust to Push-up', 'media_path': 'exercises/172-squat-thrust-to-push-up.jpg', 'media_type': 'jpg', 'representation_kind': 'static_key_position', 'key_position': 'Controlled bottom push-up position after the squat thrust.'},
- 173: {'lockin_name': 'Cossack Squat Mobility Flow', 'media_path': 'exercises/173-cossack-squat-mobility-flow.jpg', 'media_type': 'jpg', 'representation_kind': 'static_key_position', 'key_position': 'Cossack endpoint with one knee bent and the opposite leg long.'},
- 174: {'lockin_name': 'Inchworm Push-up Walkout', 'media_path': 'exercises/174-inchworm-push-up-walkout.jpg', 'media_type': 'jpg', 'representation_kind': 'static_key_position', 'key_position': 'Fully walked-out high-plank position.'},
- 175: {'lockin_name': 'Ninety-ninety Rotation Recovery', 'media_path': 'exercises/175-ninety-ninety-rotation-recovery.jpg', 'media_type': 'jpg', 'representation_kind': 'static_key_position', 'key_position': 'Ninety-ninety seat rotating toward the front shin with the opposite arm raised.'},
- 176: {'lockin_name': 'Thread-the-needle Recovery Flow', 'media_path': 'exercises/176-thread-the-needle-recovery-flow.jpg', 'media_type': 'jpg', 'representation_kind': 'static_key_position', 'key_position': 'Arm threaded beneath the supporting arm with hips centered.'},
-}
-
-for static_media in STATIC_EXERCISE_IMAGES.values():
-    static_media.update({
-        'source_provider': 'OpenAI built-in image generation',
-        'generated_on': '2026-11-23',
-        'visual_review': 'approved',
-        'warning': 'Static key-position illustration only; the complete written instructions remain authoritative.',
-    })
-
-
-STATIC_DIR = Path(__file__).resolve().parent / "static"
-ANIMATED_MEDIA_TYPES = {"gif", "mp4"}
-STATIC_MEDIA_TYPES = {"jpg", "jpeg", "png", "webp"}
-
-
-def _media_file_exists(media):
-    return bool(media and (STATIC_DIR / media["media_path"]).is_file())
-
-
 def get_exercise_media(exercise_id):
-    """Return the best valid approved visual for an original source ID.
-
-    Priority is an existing GIF/MP4, then an approved static fallback, then a
-    legacy approved static entry. Returning ``None`` preserves the frontend's
-    existing "Demo coming soon" behavior when no valid file exists.
-    """
-    primary_media = EXERCISE_MEDIA.get(exercise_id)
-    if (
-        primary_media
-        and primary_media.get("media_type") in ANIMATED_MEDIA_TYPES
-        and _media_file_exists(primary_media)
-    ):
-        return primary_media
-
-    static_fallback = STATIC_EXERCISE_IMAGES.get(exercise_id)
-    if _media_file_exists(static_fallback):
-        return static_fallback
-
-    if (
-        primary_media
-        and primary_media.get("media_type") in STATIC_MEDIA_TYPES
-        and _media_file_exists(primary_media)
-    ):
-        return primary_media
-    return None
+    """Return approved media metadata for an original source ID, or None."""
+    return EXERCISE_MEDIA.get(exercise_id)

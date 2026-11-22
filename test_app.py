@@ -3,7 +3,6 @@ import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
 from app import (
     build_recommendation,
@@ -33,54 +32,9 @@ class WorkoutUiTests(unittest.TestCase):
         self.assertTrue(result)
         self.assertTrue(all("instructions" in exercise for exercise in result))
         self.assertTrue(all("media_url" in exercise for exercise in result))
-        self.assertTrue(all("goals" in exercise for exercise in result))
         self.assertTrue(all(exercise["keywords"] for exercise in result))
         self.assertTrue(all(exercise["level"] == "beginner" for exercise in result))
         self.assertTrue(all(exercise["duration"] <= 30 for exercise in result))
-        source_by_id = {exercise["id"]: exercise for exercise in exercises}
-        for exercise in result:
-            self.assertEqual(exercise["goals"], source_by_id[exercise["id"]]["goals"])
-
-    def test_replacement_gifs_are_attached_and_served(self):
-        expected_paths = {
-            103: "exercises/103-replacement.gif",
-            124: "exercises/124-replacement.gif",
-            151: "exercises/151-replacement.gif",
-        }
-        with tempfile.TemporaryDirectory() as temp_dir:
-            client = create_app({
-                "TESTING": True,
-                "SECRET_KEY": "test-secret-key",
-                "DATABASE": str(Path(temp_dir) / "media.db"),
-            }).test_client()
-
-            for exercise_id, media_path in expected_paths.items():
-                with self.subTest(exercise_id=exercise_id):
-                    exercise = next(
-                        item for item in exercises if item["id"] == exercise_id
-                    )
-                    with patch("app.recommend_workout", return_value=[exercise]):
-                        recommendation = build_recommendation({
-                            "goal": exercise["goals"][0],
-                            "level": exercise["level"],
-                            "equipment": [],
-                            "duration": 30,
-                        })[0]
-
-                    self.assertEqual(
-                        recommendation["media_url"],
-                        "/static/" + media_path,
-                    )
-                    self.assertEqual(recommendation["media_type"], "gif")
-                    response = client.get(recommendation["media_url"])
-                    try:
-                        self.assertEqual(response.status_code, 200)
-                        self.assertEqual(response.mimetype, "image/gif")
-                        self.assertTrue(
-                            response.data.startswith((b"GIF87a", b"GIF89a"))
-                        )
-                    finally:
-                        response.close()
 
     def test_speed_skater_has_specific_display_keywords(self):
         speed_skater = next(
@@ -116,25 +70,11 @@ class WorkoutUiTests(unittest.TestCase):
             self.assertIn("dumbbells", data["equipment"])
             self.assertIn("core", data["targets"])
             self.assertIn("cardio", data["targets"])
-            preview_fields = {
-                "id", "name", "goals", "level", "body_area", "equipment",
-                "type", "duration", "sets", "reps", "hold_seconds",
-                "work_seconds", "rest_seconds", "instructions", "media_url",
-                "media_type",
-            }
             self.assertTrue(all(
-                preview_fields <= exercise.keys()
+                {"id", "name", "body_area", "equipment", "type", "media_url", "media_type"}
+                <= exercise.keys()
                 for exercise in data["exercises"]
             ))
-            source_by_id = {exercise["id"]: exercise for exercise in exercises}
-            for exercise in data["exercises"]:
-                source = source_by_id[exercise["id"]]
-                for field in (
-                    "goals", "level", "duration", "sets", "reps",
-                    "hold_seconds", "work_seconds", "rest_seconds",
-                    "instructions",
-                ):
-                    self.assertEqual(exercise[field], source.get(field))
 
     def test_build_recommendation_rejects_unavailable_level(self):
         with self.assertRaises(ValueError):
@@ -241,7 +181,7 @@ class WorkoutUiTests(unittest.TestCase):
                 options["levels"]["first_pushup"],
                 ["beginner", "intermediate", "advanced"],
             )
-            advanced_plan = first_client.post("/api/recommendations", json={
+            unavailable = first_client.post("/api/recommendations", json={
                 "goal": "lower_body_strength",
                 "level": "advanced",
                 "equipment": [
@@ -255,9 +195,9 @@ class WorkoutUiTests(unittest.TestCase):
                 ],
                 "duration": 180,
             })
-            self.assertEqual(advanced_plan.status_code, 200)
-            self.assertTrue(advanced_plan.get_json()["exercises"])
-            self.assertIsNone(advanced_plan.get_json()["empty_message"])
+            self.assertEqual(unavailable.status_code, 200)
+            self.assertEqual(unavailable.get_json()["exercises"], [])
+            self.assertIn("No exercises", unavailable.get_json()["empty_message"])
 
             duplicate = second_client.post("/api/auth/register", json={
                 "username": "RUNNER_1",

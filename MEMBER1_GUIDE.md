@@ -20,7 +20,8 @@ from recommendation import get_available_equipment
 
 - `goal`: use a value returned by `get_available_goals()`.
 - `level`: always use `get_available_levels(goal)` after a goal is selected.
-  The helper returns every level with at least one matching exercise.
+  The helper only returns levels with at least two matching exercises. This
+  prevents the dropdown from offering a level that only produces one exercise.
 - `available_equipment`: a list, tuple, or set of equipment names. Use values
   returned by `get_available_equipment()`. An empty list means no equipment.
 - `duration`: a positive whole number of minutes.
@@ -54,9 +55,6 @@ contains the database fields, including `name`, `sets`, `reps`,
 `hold_seconds`, `work_seconds`, `rest_seconds`, `duration`, `equipment`,
 `instructions`, and `video_url`.
 Invalid inputs and valid searches with no matches return an empty list.
-For supported UI inputs (15-180 minutes), recommendations contain at least
-three distinct exercise IDs. The duration field remains a maximum budget; the
-planner does not inflate sets merely to fill unused time.
 
 ## Dropdown options
 
@@ -68,8 +66,10 @@ levels = get_available_levels(selected_goal)
 equipment = get_available_equipment()
 ```
 
-Beginner, intermediate, and advanced are supported for every available goal.
-The selected goal and level are never substituted during recommendation.
+Beginner and intermediate are the meaningful recommendation levels currently
+returned by the helpers. Advanced exercises remain in the database, but no
+single goal has enough advanced exercises to offer a useful advanced dropdown
+option yet.
 
 ## Displaying repetitions and timers
 
