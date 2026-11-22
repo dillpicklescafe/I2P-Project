@@ -3651,20 +3651,393 @@ exercises = [
 
 ]
 
-# Keep a focused set for LockIn. The omitted records remain above so the
-# database can be expanded later without having to recreate them.
-excluded_exercise_ids = [
-    31, 38, 41, 44, 45, 48, 50, 54, 55, 57,
-    58, 59, 62, 63, 64, 67, 69, 72, 73, 74,
-    75, 77, 84, 87, 90, 97, 103, 104, 112, 113,
-    114, 117, 119, 124, 126, 128, 132, 133, 135, 136
+# Coverage exercises fill goal/difficulty combinations that do not exist in
+# the original 150-record source. They intentionally require no equipment so
+# they remain valid when a user has selected none of the optional equipment.
+coverage_exercises = [
+    {
+        "id": 151, "name": "Seated Cross-body Pattern",
+        "body_area": ["full_body"],
+        "goals": ["accessibility", "coordination"], "type": "coordination",
+        "level": "intermediate", "position": "seated", "equipment": [],
+        "movement_type": "dynamic", "sets": 3, "reps": 8,
+        "hold_seconds": None, "duration": 5,
+        "instructions": [
+            "Sit tall near the front of a stable chair with both feet planted.",
+            "Lift one knee while reaching the opposite hand toward it.",
+            "Return with control, alternate sides, and keep an even rhythm."
+        ],
+        "easier_variation": None, "harder_variation": "Seated Pattern Flow"
+    },
+    {
+        "id": 152, "name": "Seated Pattern Flow",
+        "body_area": ["full_body"],
+        "goals": ["accessibility", "balance", "coordination"],
+        "type": "coordination", "level": "advanced", "position": "seated",
+        "equipment": [], "movement_type": "dynamic", "sets": 3, "reps": 10,
+        "hold_seconds": None, "duration": 6,
+        "instructions": [
+            "Sit tall on a stable chair with feet planted and arms at shoulder height.",
+            "Alternate a cross-body knee reach, an overhead reach, and a lateral toe tap.",
+            "Repeat the sequence smoothly without rushing or leaning from the chair."
+        ],
+        "easier_variation": "Seated Cross-body Pattern", "harder_variation": None
+    },
+    {
+        "id": 153, "name": "Single-leg Balance Reach Flow",
+        "body_area": ["hips", "legs", "core"],
+        "goals": ["balance", "hip_stability"], "type": "balance",
+        "level": "advanced", "position": "standing", "equipment": [],
+        "movement_type": "dynamic", "sets": 3, "reps": 6,
+        "hold_seconds": None, "duration": 6,
+        "instructions": [
+            "Stand on one leg with the knee softly bent and brace your trunk.",
+            "Reach the free foot forward, sideways, and behind without touching down if possible.",
+            "Return to center after each reach and complete both sides."
+        ],
+        "easier_variation": None, "harder_variation": None
+    },
+    {
+        "id": 154, "name": "Tempo Push-up with Pause",
+        "body_area": ["chest", "arms", "core"],
+        "goals": ["first_pushup", "upper_body_strength"], "type": "strength",
+        "level": "advanced", "position": "prone", "equipment": [],
+        "movement_type": "push", "sets": 4, "reps": 6,
+        "hold_seconds": None, "duration": 7,
+        "instructions": [
+            "Begin in a strong high-plank position with hands under your shoulders.",
+            "Lower for three seconds and pause just above the floor for one second.",
+            "Press up while keeping your body in one line; stop before form breaks."
+        ],
+        "easier_variation": "Push-up", "harder_variation": None
+    },
+    {
+        "id": 155, "name": "Single-leg Squat to Knee Drive",
+        "body_area": ["legs", "hips", "core"],
+        "goals": ["lower_body_strength", "hip_stability"], "type": "strength",
+        "level": "advanced", "position": "standing", "equipment": [],
+        "movement_type": "squat", "sets": 3, "reps": 6,
+        "hold_seconds": None, "duration": 7,
+        "instructions": [
+            "Balance on one leg and send your hips back into a shallow single-leg squat.",
+            "Drive through the standing foot and bring the free knee forward.",
+            "Reset your balance between repetitions and train both sides equally."
+        ],
+        "easier_variation": None, "harder_variation": None
+    },
+    {
+        "id": 156, "name": "Dynamic Mobility Flow",
+        "body_area": ["full_body"],
+        "goals": ["mobility", "warm_up"], "type": "mobility",
+        "level": "intermediate", "position": "standing", "equipment": [],
+        "movement_type": "mobility", "sets": 2, "reps": 6,
+        "hold_seconds": None, "duration": 6,
+        "instructions": [
+            "Step into a comfortable reverse lunge and rotate your chest toward the front leg.",
+            "Return to standing, sweep both arms overhead, and alternate sides.",
+            "Move continuously through a pain-free range without bouncing."
+        ],
+        "easier_variation": None, "harder_variation": "Complex Mobility Flow"
+    },
+    {
+        "id": 157, "name": "Complex Mobility Flow",
+        "body_area": ["full_body"],
+        "goals": ["mobility", "warm_up"], "type": "mobility",
+        "level": "advanced", "position": "standing", "equipment": [],
+        "movement_type": "mobility", "sets": 3, "reps": 5,
+        "hold_seconds": None, "duration": 8,
+        "instructions": [
+            "Step into a reverse lunge, rotate toward the front leg, then place your hands down.",
+            "Straighten the front leg briefly, return to the lunge, and step through to stand.",
+            "Alternate sides with controlled transitions and a pain-free range."
+        ],
+        "easier_variation": "Dynamic Mobility Flow", "harder_variation": None
+    },
+    {
+        "id": 158, "name": "Controlled Recovery Flow",
+        "body_area": ["full_body"],
+        "goals": ["cool_down"], "type": "mobility",
+        "level": "intermediate", "position": "mixed", "equipment": [],
+        "movement_type": "mobility", "sets": 2, "reps": 5,
+        "hold_seconds": None, "duration": 7,
+        "instructions": [
+            "Move slowly from a kneeling hip-flexor stretch into a half split.",
+            "Return to kneeling, add a gentle side bend, and breathe steadily.",
+            "Complete the sequence on both sides without forcing any position."
+        ],
+        "easier_variation": None, "harder_variation": "Deep Recovery Flow"
+    },
+    {
+        "id": 159, "name": "Deep Recovery Flow",
+        "body_area": ["full_body"],
+        "goals": ["cool_down", "mobility"], "type": "mobility",
+        "level": "advanced", "position": "floor", "equipment": [],
+        "movement_type": "mobility", "sets": 2, "reps": 4,
+        "hold_seconds": None, "duration": 9,
+        "instructions": [
+            "Move slowly through a half-kneeling hip stretch, half split, and gentle rotation.",
+            "Pause for one relaxed breath in each position and keep the joints comfortable.",
+            "Reverse the sequence before changing sides."
+        ],
+        "easier_variation": "Controlled Recovery Flow", "harder_variation": None
+    },
+    {
+        "id": 160, "name": "Prone Posture Control Flow",
+        "body_area": ["back", "shoulders", "core"],
+        "goals": ["posture"], "type": "strength",
+        "level": "advanced", "position": "prone", "equipment": [],
+        "movement_type": "pull", "sets": 3, "reps": 6,
+        "hold_seconds": None, "duration": 7,
+        "instructions": [
+            "Lie face down with your forehead hovering and arms reaching overhead.",
+            "Lift your arms slightly, sweep them into a W shape, and draw the shoulder blades down.",
+            "Reach overhead again and lower with control while keeping the neck long."
+        ],
+        "easier_variation": None, "harder_variation": None
+    }
 ]
 
-curated_exercises = []
+coverage_exercises.extend([
+    {
+        "id": 161, "name": "Low-impact Squat and Reach",
+        "body_area": ["legs", "shoulders", "core"],
+        "goals": ["accessibility", "overall_fitness"], "type": "strength",
+        "level": "beginner", "position": "standing", "equipment": [],
+        "movement_type": "squat", "sets": 2, "reps": 8,
+        "hold_seconds": None, "duration": 3,
+        "instructions": [
+            "Stand with feet slightly wider than hip-width and keep the heels grounded.",
+            "Sit the hips back into a comfortable shallow squat while reaching both arms forward.",
+            "Stand tall and reach overhead; use a smaller range whenever needed."
+        ],
+        "easier_variation": None, "harder_variation": None
+    },
+    {
+        "id": 162, "name": "Seated Mobility Reach Matrix",
+        "body_area": ["shoulders", "spine", "hips"],
+        "goals": ["accessibility", "mobility", "warm_up"], "type": "mobility",
+        "level": "intermediate", "position": "seated", "equipment": [],
+        "movement_type": "mobility", "sets": 2, "reps": 6,
+        "hold_seconds": None, "duration": 4,
+        "instructions": [
+            "Sit upright on the floor with legs in a comfortable position.",
+            "Reach forward, diagonally, and overhead while rotating gently through the upper back.",
+            "Return to a tall posture between reaches and repeat both directions."
+        ],
+        "easier_variation": None, "harder_variation": None
+    },
+    {
+        "id": 163, "name": "Seated Guard and Toe-tap Sequence",
+        "body_area": ["full_body"],
+        "goals": ["accessibility", "coordination", "warm_up"],
+        "type": "coordination", "level": "intermediate", "position": "seated",
+        "equipment": [], "movement_type": "dynamic", "sets": 3, "reps": 8,
+        "hold_seconds": None, "duration": 4,
+        "instructions": [
+            "Sit tall on the floor with knees bent and hands held lightly near the chest.",
+            "Alternate a forward hand reach with an opposite-side toe tap.",
+            "Add a controlled side reach every fourth count and maintain steady breathing."
+        ],
+        "easier_variation": None, "harder_variation": None
+    },
+    {
+        "id": 164, "name": "Ninety-ninety Hip Switch",
+        "body_area": ["hips", "core"],
+        "goals": ["hip_stability", "mobility", "warm_up"], "type": "mobility",
+        "level": "intermediate", "position": "seated", "equipment": [],
+        "movement_type": "mobility", "sets": 2, "reps": 8,
+        "hold_seconds": None, "duration": 4,
+        "instructions": [
+            "Sit with both knees bent and feet wider than the hips.",
+            "Lower both knees toward one side while keeping the torso tall.",
+            "Drive through the hips to switch sides slowly without forcing the range."
+        ],
+        "easier_variation": None, "harder_variation": None
+    },
+    {
+        "id": 165, "name": "Supine Recovery Rotation",
+        "body_area": ["spine", "hips", "chest"],
+        "goals": ["cool_down", "posture"], "type": "mobility",
+        "level": "intermediate", "position": "supine", "equipment": [],
+        "movement_type": "mobility", "sets": 2, "reps": 5,
+        "hold_seconds": None, "duration": 4,
+        "instructions": [
+            "Lie on your back with knees bent and arms open at shoulder height.",
+            "Lower the knees to one side while keeping both shoulders relaxed toward the floor.",
+            "Return through center and alternate sides with a slow exhale."
+        ],
+        "easier_variation": None, "harder_variation": None
+    },
+    {
+        "id": 166, "name": "Kneeling Lat and Side-body Flow",
+        "body_area": ["back", "shoulders", "spine"],
+        "goals": ["cool_down", "posture"], "type": "mobility",
+        "level": "intermediate", "position": "kneeling", "equipment": [],
+        "movement_type": "mobility", "sets": 2, "reps": 5,
+        "hold_seconds": None, "duration": 4,
+        "instructions": [
+            "Begin on hands and knees, then send the hips gently toward the heels.",
+            "Walk both hands to one side until you feel a comfortable stretch along the torso.",
+            "Return through center and repeat on the other side without holding your breath."
+        ],
+        "easier_variation": None, "harder_variation": None
+    },
+    {
+        "id": 167, "name": "Eccentric Push-up Lowering",
+        "body_area": ["chest", "arms", "core"],
+        "goals": ["first_pushup", "upper_body_strength"], "type": "strength",
+        "level": "intermediate", "position": "prone", "equipment": [],
+        "movement_type": "push", "sets": 3, "reps": 5,
+        "hold_seconds": None, "duration": 5,
+        "instructions": [
+            "Start in a high plank with hands beneath the shoulders and the trunk braced.",
+            "Lower to the floor over three controlled seconds while keeping the elbows angled back.",
+            "Place the knees down to reset safely before the next repetition."
+        ],
+        "easier_variation": None, "harder_variation": None
+    },
+    {
+        "id": 168, "name": "Push-up Plank Weight Shift",
+        "body_area": ["shoulders", "chest", "core"],
+        "goals": ["first_pushup", "core_stability", "upper_body_strength"],
+        "type": "strength", "level": "intermediate", "position": "prone",
+        "equipment": [], "movement_type": "push", "sets": 3, "reps": 8,
+        "hold_seconds": None, "duration": 5,
+        "instructions": [
+            "Hold a high plank with feet slightly wider than hip-width.",
+            "Shift your shoulders a few centimeters forward of the wrists, then press back.",
+            "Keep the ribs and hips steady and use a small pain-free range."
+        ],
+        "easier_variation": None, "harder_variation": None
+    },
+    {
+        "id": 169, "name": "Seated Direction-change Drill",
+        "body_area": ["full_body"],
+        "goals": ["accessibility", "cardio", "coordination", "overall_fitness"],
+        "type": "cardio", "level": "advanced", "position": "seated",
+        "equipment": [], "movement_type": "dynamic", "sets": 3, "reps": 10,
+        "hold_seconds": None, "duration": 4,
+        "instructions": [
+            "Sit tall on the floor with knees bent and brace the trunk lightly.",
+            "Perform two quick cross-body reaches, two heel taps, and one overhead reach.",
+            "Reverse the lead side each round while keeping the sequence precise."
+        ],
+        "easier_variation": None, "harder_variation": None
+    },
+    {
+        "id": 170, "name": "Seated Core Bracing Matrix",
+        "body_area": ["core", "back", "shoulders"],
+        "goals": ["accessibility", "core_stability", "posture"], "type": "strength",
+        "level": "advanced", "position": "seated", "equipment": [],
+        "movement_type": "isometric", "sets": 3, "reps": 6,
+        "hold_seconds": None, "duration": 4,
+        "instructions": [
+            "Sit tall on the floor with knees bent and lean back slightly without rounding.",
+            "Reach both arms forward, then diagonally to each side while resisting trunk rotation.",
+            "Return upright between rounds and stop if the lower back loses position."
+        ],
+        "easier_variation": None, "harder_variation": None
+    },
+    {
+        "id": 171, "name": "Lateral Bound and Stick",
+        "body_area": ["legs", "hips", "core"],
+        "goals": ["balance", "cardio", "coordination", "hip_stability", "lower_body_strength", "overall_fitness"],
+        "type": "plyometric", "level": "advanced", "position": "standing",
+        "equipment": [], "movement_type": "lateral", "sets": 3, "reps": 6,
+        "hold_seconds": None, "duration": 3,
+        "instructions": [
+            "Push off one foot and travel sideways to land softly on the opposite leg.",
+            "Hold the landing briefly with the knee aligned over the foot.",
+            "Alternate directions and reduce the jump distance before balance deteriorates."
+        ],
+        "easier_variation": None, "harder_variation": None
+    },
+    {
+        "id": 172, "name": "Squat Thrust to Push-up",
+        "body_area": ["full_body"],
+        "goals": ["cardio", "core_stability", "first_pushup", "overall_fitness", "upper_body_strength"],
+        "type": "cardio", "level": "advanced", "position": "mixed",
+        "equipment": [], "movement_type": "dynamic", "sets": 3, "reps": 5,
+        "hold_seconds": None, "duration": 4,
+        "instructions": [
+            "Squat down, place both hands on the floor, and step or jump into a strong plank.",
+            "Perform one controlled push-up, keeping the trunk aligned.",
+            "Return the feet toward the hands and stand without adding an unnecessary jump."
+        ],
+        "easier_variation": None, "harder_variation": None
+    },
+    {
+        "id": 173, "name": "Cossack Squat Mobility Flow",
+        "body_area": ["legs", "hips"],
+        "goals": ["hip_stability", "lower_body_strength", "mobility", "warm_up"],
+        "type": "mobility", "level": "advanced", "position": "standing",
+        "equipment": [], "movement_type": "squat", "sets": 2, "reps": 5,
+        "hold_seconds": None, "duration": 3,
+        "instructions": [
+            "Take a wide stance and shift the hips toward one side as that knee bends.",
+            "Keep the opposite leg long and the chest lifted within a comfortable depth.",
+            "Press through the bent leg to transition smoothly to the other side."
+        ],
+        "easier_variation": None, "harder_variation": None
+    },
+    {
+        "id": 174, "name": "Inchworm Push-up Walkout",
+        "body_area": ["shoulders", "chest", "core", "hamstrings"],
+        "goals": ["core_stability", "first_pushup", "upper_body_strength", "warm_up"],
+        "type": "strength", "level": "advanced", "position": "mixed",
+        "equipment": [], "movement_type": "push", "sets": 2, "reps": 5,
+        "hold_seconds": None, "duration": 4,
+        "instructions": [
+            "Hinge forward, place your hands down, and walk them into a high plank.",
+            "Complete one controlled push-up while keeping the body aligned.",
+            "Walk the hands back, soften the knees as needed, and stand tall."
+        ],
+        "easier_variation": None, "harder_variation": None
+    },
+    {
+        "id": 175, "name": "Ninety-ninety Rotation Recovery",
+        "body_area": ["hips", "spine", "shoulders"],
+        "goals": ["cool_down", "mobility", "posture"], "type": "mobility",
+        "level": "advanced", "position": "seated", "equipment": [],
+        "movement_type": "mobility", "sets": 2, "reps": 4,
+        "hold_seconds": None, "duration": 3,
+        "instructions": [
+            "Sit in a ninety-ninety hip position with both sit bones comfortable on the floor.",
+            "Rotate the rib cage toward the front shin and reach the opposite arm upward.",
+            "Return slowly, complete both sides, and avoid forcing the hip range."
+        ],
+        "easier_variation": None, "harder_variation": None
+    },
+    {
+        "id": 176, "name": "Thread-the-needle Recovery Flow",
+        "body_area": ["spine", "shoulders", "back"],
+        "goals": ["cool_down", "mobility", "posture"], "type": "mobility",
+        "level": "advanced", "position": "kneeling", "equipment": [],
+        "movement_type": "mobility", "sets": 2, "reps": 4,
+        "hold_seconds": None, "duration": 3,
+        "instructions": [
+            "Begin on hands and knees and slide one arm beneath the other across the floor.",
+            "Rotate gently through the upper back, then sweep that arm toward the ceiling.",
+            "Repeat with control on both sides while keeping the hips centered."
+        ],
+        "easier_variation": None, "harder_variation": None
+    }
+])
 
-for exercise in exercises:
-    if exercise["id"] not in excluded_exercise_ids:
-        curated_exercises.append(exercise)
+exercises.extend(coverage_exercises)
+
+# Preserve every source record and stable ID even when a record is intentionally
+# omitted from recommendations. Other modules continue importing ``exercises``
+# as the active pool; audits can inspect ``all_exercises`` for full retention.
+all_exercises = exercises
+excluded_recommendation_ids = frozenset({
+    62, 63, 64, 73, 74, 77, 84, 87, 90, 97, 104, 112, 113, 114,
+    117, 119, 126, 132, 133, 135, 136
+})
+curated_exercises = [
+    exercise for exercise in all_exercises
+    if exercise["id"] not in excluded_recommendation_ids
+]
 
 # Normalize fields used by the recommendation system. Planning values such as
 # sets, repetitions, hold time, intervals, and duration are LockIn estimates,
@@ -3680,7 +4053,7 @@ cardio_intervals = {
     "Invisible Jump Rope": [30, 30]
 }
 
-for exercise in curated_exercises:
+for exercise in all_exercises:
     exercise["exercise_type"] = exercise["type"]
     exercise["work_seconds"] = None
     exercise["rest_seconds"] = None
@@ -3693,10 +4066,10 @@ for exercise in curated_exercises:
 
 exercise_names = []
 
-for exercise in curated_exercises:
+for exercise in all_exercises:
     exercise_names.append(exercise["name"])
 
-for exercise in curated_exercises:
+for exercise in all_exercises:
     if exercise["easier_variation"] not in exercise_names:
         exercise["easier_variation"] = None
     if exercise["harder_variation"] not in exercise_names:

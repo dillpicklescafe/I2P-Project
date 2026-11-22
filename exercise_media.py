@@ -620,6 +620,75 @@ EXERCISE_MEDIA.update({
  131: {'lockin_name': 'Supported March with Pause', 'match_type': 'manually_provided_unreviewed', 'media_path': 'exercises/131.jpg', 'media_type': 'jpg', 'source_provider': 'User-provided', 'source_url': None, 'license_name': 'Unknown / not provided', 'license_url': None, 'attribution': None, 'warning': 'File is structurally valid; movement accuracy and reuse license have not been reviewed. This is a static JPG, not a GIF or MP4.'}
 })
 
+# Added only after explicit visual approval in the 66-exercise local review.
+# Candidates with known movement/equipment conflicts remain unmapped even when
+# marked approved in the exported decision file.
+EXERCISE_MEDIA.update({
+ 48: {
+      'lockin_name': 'Superman Lift',
+      'repdb_id': 'superman',
+      'repdb_name': 'Superman',
+      'match_type': 'reviewed_approved_possible',
+      'media_path': 'exercises/042-superman-hold.gif',
+      'media_type': 'gif',
+      'source_images': [
+          'images/flat/superman-start.webp',
+          'images/flat/superman-peak.webp'
+      ],
+      'warning': None
+  },
+ 171: {
+      'lockin_name': 'Lateral Bound and Stick',
+      'match_type': 'reviewed_approved_possible',
+      'media_path': 'exercises/118.gif',
+      'media_type': 'gif',
+      'source_provider': 'User-provided',
+      'source_url': None,
+      'license_name': 'Unknown / not provided',
+      'license_url': None,
+      'attribution': None,
+      'warning': 'Visually approved for the lateral bound movement; reuse license remains unverified.'
+  }
+})
+
+# User-saved files visually checked against the current instructions on
+# 2026-11-22. The original 59.gif remains deliberately unregistered because
+# it demonstrates a cobra press-up rather than the specified prone cobra hold.
+EXERCISE_MEDIA.update({
+ 38: {'lockin_name': 'Dumbbell Front Raise', 'match_type': 'manually_provided_reviewed', 'media_path': 'exercises/38.gif', 'media_type': 'gif', 'source_provider': 'User-provided', 'source_url': None, 'license_name': 'Unknown / not provided', 'license_url': None, 'attribution': None, 'warning': 'Movement reviewed against LockIn instructions; reuse license has not been provided.'},
+ 41: {'lockin_name': 'Resistance Band Shoulder Press', 'match_type': 'manually_provided_reviewed', 'media_path': 'exercises/41.gif', 'media_type': 'gif', 'source_provider': 'User-provided', 'source_url': None, 'license_name': 'Unknown / not provided', 'license_url': None, 'attribution': None, 'warning': 'Movement reviewed against LockIn instructions; reuse license has not been provided.'},
+ 45: {'lockin_name': 'Resistance Band Lateral Raise', 'match_type': 'manually_provided_reviewed', 'media_path': 'exercises/45.gif', 'media_type': 'gif', 'source_provider': 'User-provided', 'source_url': None, 'license_name': 'Unknown / not provided', 'license_url': None, 'attribution': None, 'warning': 'Movement reviewed against LockIn instructions; reuse license has not been provided.'},
+ 50: {'lockin_name': 'Bent-over Reverse Fly', 'match_type': 'manually_provided_reviewed', 'media_path': 'exercises/50.gif', 'media_type': 'gif', 'source_provider': 'User-provided', 'source_url': None, 'license_name': 'Unknown / not provided', 'license_url': None, 'attribution': None, 'warning': 'Movement reviewed against LockIn instructions; reuse license has not been provided.'},
+ 57: {'lockin_name': 'Dumbbell Shrug', 'match_type': 'manually_provided_reviewed', 'media_path': 'exercises/57.gif', 'media_type': 'gif', 'source_provider': 'User-provided', 'source_url': None, 'license_name': 'Unknown / not provided', 'license_url': None, 'attribution': None, 'warning': 'Movement reviewed against LockIn instructions; reuse license has not been provided.'},
+ 58: {'lockin_name': 'Chest-supported Dumbbell Row', 'match_type': 'manually_provided_reviewed', 'media_path': 'exercises/58.gif', 'media_type': 'gif', 'source_provider': 'User-provided', 'source_url': None, 'license_name': 'Unknown / not provided', 'license_url': None, 'attribution': None, 'warning': 'Movement reviewed against LockIn instructions; reuse license has not been provided.'}
+})
+
+# Replacement visually reviewed across its full 51-frame sequence. It shows
+# the instructed prone position, arms beside the torso, chest/hand lift, and
+# shoulder-blade retraction without using the hands for a press-up.
+EXERCISE_MEDIA.update({
+ 59: {'lockin_name': 'Prone Cobra Hold', 'match_type': 'manually_provided_reviewed', 'media_path': 'exercises/59-replacement.gif', 'media_type': 'gif', 'source_provider': 'User-provided', 'source_url': None, 'license_name': 'Unknown / not provided', 'license_url': None, 'attribution': None, 'warning': 'Replacement movement reviewed against LockIn instructions; the rejected 59.gif is intentionally not mapped. Reuse license has not been provided.'}
+})
+
+# Additional user-saved files reviewed against the complete movement sequence,
+# body position, and equipment requirements.
+EXERCISE_MEDIA.update({
+ 31: {'lockin_name': 'Wide Push-up', 'match_type': 'manually_provided_reviewed', 'media_path': 'exercises/31.gif', 'media_type': 'gif', 'source_provider': 'User-provided', 'source_url': None, 'license_name': 'Unknown / not provided', 'license_url': None, 'attribution': None, 'warning': 'Movement reviewed against LockIn instructions; reuse license has not been provided.'},
+ 44: {'lockin_name': 'Incline Dumbbell Press', 'match_type': 'manually_provided_reviewed', 'media_path': 'exercises/44.gif', 'media_type': 'gif', 'source_provider': 'User-provided', 'source_url': None, 'license_name': 'Unknown / not provided', 'license_url': None, 'attribution': None, 'warning': 'Movement reviewed against LockIn instructions; reuse license has not been provided.'},
+ 54: {'lockin_name': 'Prone Y-T-W Raise', 'match_type': 'manually_provided_reviewed', 'media_path': 'exercises/54.gif', 'media_type': 'gif', 'source_provider': 'User-provided', 'source_url': None, 'license_name': 'Unknown / not provided', 'license_url': None, 'attribution': None, 'warning': 'Movement sequence reviewed against LockIn instructions; reuse license has not been provided.'},
+ 55: {'lockin_name': 'Renegade Row', 'match_type': 'manually_provided_reviewed', 'media_path': 'exercises/55.gif', 'media_type': 'gif', 'source_provider': 'User-provided', 'source_url': None, 'license_name': 'Unknown / not provided', 'license_url': None, 'attribution': None, 'warning': 'Movement reviewed against LockIn instructions; reuse license has not been provided.'},
+ 67: {'lockin_name': 'Lying Triceps Extension', 'match_type': 'manually_provided_reviewed', 'media_path': 'exercises/67.gif', 'media_type': 'gif', 'source_provider': 'User-provided', 'source_url': None, 'license_name': 'Unknown / not provided', 'license_url': None, 'attribution': None, 'warning': 'Movement reviewed against LockIn instructions; reuse license has not been provided.'},
+ 69: {'lockin_name': 'Bench Triceps Dip', 'match_type': 'manually_provided_reviewed', 'media_path': 'exercises/69.gif', 'media_type': 'gif', 'source_provider': 'User-provided', 'source_url': None, 'license_name': 'Unknown / not provided', 'license_url': None, 'attribution': None, 'warning': 'Movement reviewed against LockIn instructions; reuse license has not been provided.'},
+ 72: {'lockin_name': 'Zottman Curl', 'match_type': 'manually_provided_reviewed', 'media_path': 'exercises/72.gif', 'media_type': 'gif', 'source_provider': 'User-provided', 'source_url': None, 'license_name': 'Unknown / not provided', 'license_url': None, 'attribution': None, 'warning': 'Movement sequence reviewed against LockIn instructions; reuse license has not been provided.'},
+ 75: {'lockin_name': 'Diamond Push-up', 'match_type': 'manually_provided_reviewed', 'media_path': 'exercises/75.gif', 'media_type': 'gif', 'source_provider': 'User-provided', 'source_url': None, 'license_name': 'Unknown / not provided', 'license_url': None, 'attribution': None, 'warning': 'Movement reviewed against LockIn instructions; reuse license has not been provided.'}
+})
+
+# Replacement reviewed frame-by-frame: both cross-body sides are demonstrated,
+# both legs and feet remain complete, and the final frame matches the first.
+EXERCISE_MEDIA.update({
+ 151: {'lockin_name': 'Seated Cross-body Pattern', 'match_type': 'manually_provided_reviewed', 'media_path': 'exercises/151-replacement.gif', 'media_type': 'gif', 'source_provider': 'User-provided', 'source_url': None, 'license_name': 'Unknown / not provided', 'license_url': None, 'attribution': None, 'warning': 'Replacement reviewed against LockIn instructions; old 151.gif is intentionally preserved but not mapped. Reuse license has not been provided.'}
+})
+
 def get_exercise_media(exercise_id):
     """Return approved media metadata for an original source ID, or None."""
     return EXERCISE_MEDIA.get(exercise_id)

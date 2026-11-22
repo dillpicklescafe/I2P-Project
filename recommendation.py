@@ -1,9 +1,14 @@
 import random
+from itertools import combinations
 from exercises import exercises
 
 
 VALID_LEVELS = ["beginner", "intermediate", "advanced"]
-MIN_EXERCISES_FOR_LEVEL = 2
+MIN_EXERCISES_FOR_LEVEL = 1
+MIN_EXERCISES_PER_WORKOUT = 3
+SUPPORTED_EQUIPMENT = [
+    "bar", "bench", "chair", "dumbbells", "resistance_band", "step", "wall"
+]
 
 
 def get_available_goals():
@@ -52,15 +57,8 @@ def get_available_levels(goal=None):
 
 
 def get_available_equipment():
-    """Return equipment names used by the active exercise database."""
-    equipment_options = []
-
-    for exercise in exercises:
-        for item in exercise["equipment"]:
-            if item not in equipment_options:
-                equipment_options.append(item)
-
-    return sorted(equipment_options)
+    """Return equipment choices supported by the planner UI."""
+    return SUPPORTED_EQUIPMENT.copy()
 
 
 def filter_exercises(goal, level, available_equipment):
@@ -145,36 +143,92 @@ def recommend_workout(goal, level, available_equipment, duration, shuffle=True,
             exercise for exercise in candidates
             if not exercise["equipment"]
         ]
-    selected_names = []
+    def has_progression_conflict(first, second):
+        first_variations = [first["easier_variation"], first["harder_variation"]]
+        second_variations = [second["easier_variation"], second["harder_variation"]]
+        return (
+            first["name"] in second_variations
+            or second["name"] in first_variations
+        )
+
+    # Reserve room for a complementary three-exercise foundation before
+    # greedily adding optional work. This prevents a long first exercise from
+    # crowding a valid short plan out of a 15-minute budget.
+    valid_foundations = []
+    for foundation in combinations(candidates, MIN_EXERCISES_PER_WORKOUT):
+        if sum(exercise["duration"] for exercise in foundation) > duration:
+            continue
+        if any(
+            has_progression_conflict(first, second)
+            for first, second in combinations(foundation, 2)
+        ):
+            continue
+        equipped_count = sum(bool(exercise["equipment"]) for exercise in foundation)
+        body_area_count = len({
+            exercise["body_area"][0] for exercise in foundation
+        })
+        valid_foundations.append((equipped_count, body_area_count, foundation))
+
+    if valid_foundations:
+        _, _, foundation = max(
+            valid_foundations,
+            key=lambda item: (item[0], item[1]),
+        )
+        workout.extend(foundation)
+        total_duration = sum(exercise["duration"] for exercise in workout)
+
+    selected_ids = {exercise["id"] for exercise in workout}
 
     for exercise in candidates:
-        if exercise["name"] in selected_names:
+        if exercise["id"] in selected_ids:
             continue
 
-        is_progression_duplicate = False
-        for selected_exercise in workout:
-            selected_variations = [
-                selected_exercise["easier_variation"],
-                selected_exercise["harder_variation"]
-            ]
-            exercise_variations = [
-                exercise["easier_variation"],
-                exercise["harder_variation"]
-            ]
-            if exercise["name"] in selected_variations:
-                is_progression_duplicate = True
-            if selected_exercise["name"] in exercise_variations:
-                is_progression_duplicate = True
-
-        if is_progression_duplicate:
+        if any(
+            has_progression_conflict(exercise, selected_exercise)
+            for selected_exercise in workout
+        ):
             continue
 
         if total_duration + exercise["duration"] <= duration:
             workout.append(exercise)
-            selected_names.append(exercise["name"])
+            selected_ids.add(exercise["id"])
             total_duration += exercise["duration"]
 
     return workout
+
+
+def diagnose_empty_workout(goal, level, available_equipment, duration):
+    """Classify why a request cannot produce a workout.
+
+    The return value is ``None`` when actual plan generation succeeds.
+    """
+    if recommend_workout(
+        goal, level, available_equipment, duration, shuffle=False
+    ):
+        return None
+    if not isinstance(goal, str) or goal not in get_available_goals():
+        return "no goal/difficulty match"
+    if level not in VALID_LEVELS:
+        return "no goal/difficulty match"
+    if not isinstance(duration, int) or isinstance(duration, bool) or duration <= 0:
+        return "duration constraints"
+    if not isinstance(available_equipment, (list, tuple, set)):
+        return "equipment filtering"
+
+    goal_level_candidates = [
+        exercise for exercise in exercises
+        if goal in exercise["goals"] and exercise["level"] == level
+    ]
+    if not goal_level_candidates:
+        return "no goal/difficulty match"
+    equipped_candidates = filter_exercises(goal, level, available_equipment)
+    if not equipped_candidates:
+        return "equipment filtering"
+    if not any(exercise["duration"] <= duration for exercise in equipped_candidates):
+        return "duration constraints"
+    if len(equipped_candidates) < 1:
+        return "insufficient candidates"
+    return "another issue"
 
 
 def calculate_workout_duration(workout):
