@@ -297,7 +297,7 @@ video.exercise-media.is-portrait { object-fit: contain; }
 .workout-sheet-close:hover { color: var(--canvas); background: var(--orange); }
 .workout-sheet-open { overflow: hidden; }
 .workout-progress { height: 5px; display: flex; gap: 4px; margin: 4px 56px 0 0; }
-.workout-progress-segment { min-width: 1px; flex: 1 1 0; border-radius: 3px; background: #514653; transition: background .2s ease; }
+.workout-progress-segment { min-width: 1px; flex: 1 1 0; border-radius: 3px; background: #efecf0; transition: background .2s ease; }
 .workout-progress-segment.is-current { background: var(--orange); }
 .workout-progress-segment.is-complete { background: var(--green); }
 .active-workout-view { min-height: 100%; display: flex; flex-direction: column; padding-top: 40px; }
@@ -311,7 +311,7 @@ video.exercise-media.is-portrait { object-fit: contain; }
 .active-exercise-title { margin: 0; font-size: clamp(18px, 2vw, 22px); letter-spacing: -.4px; }
 .active-exercise-keywords { margin: 10px 0 20px; }
 .active-step-prescription { display: grid; gap: 7px; margin: 0; padding-left: 20px; color: var(--muted); font-size: 16px; line-height: 1.6; }
-.active-step-controls { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 24px; }
+#complete-step-button { width: 100%; margin-top: 24px; }
 .active-step-message:not(:empty) { margin-top: 10px; }
 .workout-step-carousel { display: flex; gap: 10px; overflow-x: auto; margin-top: auto; padding: 14px 0 4px; border-top: 1px solid var(--line); scroll-snap-type: x mandatory; }
 .workout-step-thumbnail { position: relative; flex: 0 0 112px; display: flex; flex-direction: column; gap: 6px; padding: 6px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); text-align: left; scroll-snap-align: start; }
@@ -520,7 +520,6 @@ video.exercise-media.is-portrait { object-fit: contain; }
   .active-exercise-media { max-height: 38vh; }
   .active-step-placeholder { min-height: 200px; }
   .active-step-content { padding: 0 4px; }
-  .active-step-controls { flex-wrap: wrap; justify-content: flex-end; }
   .workout-step-thumbnail { flex-basis: 96px; }
   .exercise-list { gap: 8px; }
   .exercise-card { grid-template-columns: 145px minmax(0, 1fr); }
