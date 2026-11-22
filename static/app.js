@@ -314,12 +314,8 @@ function renderCurrentWorkoutStep(message = "") {
     createExerciseMedia(exercise, "active-exercise-media", "active-step-placeholder", true)
   );
   const isComplete = completedWorkoutSteps.has(step.key);
-<<<<<<< Updated upstream
-  completeStepButton.textContent = isComplete ? "Mark set incomplete" : "Complete set";
-  finishWorkoutButton.hidden = completedWorkoutSteps.size !== workoutSteps.length;
-=======
   completeStepButton.textContent = isComplete ? "Mark set incomplete" : "Set completed";
->>>>>>> Stashed changes
+  finishWorkoutButton.hidden = completedWorkoutSteps.size !== workoutSteps.length;
   activeStepMessage.textContent = message;
   renderWorkoutProgress();
 }
@@ -999,6 +995,11 @@ function setAuthMode(mode) {
   signupNameFields.hidden = !registering;
   authFirstName.required = registering;
   authLastName.required = registering;
+  if (registering) {
+    authPassword.minLength = 8;
+  } else {
+    authPassword.removeAttribute("minlength");
+  }
   document.querySelector("#signup-welcome").hidden = !registering;
   document.querySelector("#auth-title").textContent = registering ? "Sign up" : "Log in";
   authSubmit.innerHTML = registering
