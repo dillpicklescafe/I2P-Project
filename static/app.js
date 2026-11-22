@@ -143,16 +143,41 @@ function prettyLabel(value) {
   return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+const goalImages = {
+  accessibility: "accessibility.jpg",
+  balance: "balance.jpg",
+  cardio: "cardio.jpg",
+  cool_down: "cooldown.jpg",
+  coordination: "coordination.jpg",
+  core_stability: "core-stability.jpg",
+  first_pushup: "first-push-up.jpg",
+  hip_stability: "hip-stability.jpg",
+  lower_body_strength: "lower-body.jpg",
+  mobility: "mobility.jpg",
+  overall_fitness: "overall-fitness.jpg",
+  posture: "posture.jpg",
+  upper_body_strength: "upper-body.jpg",
+  warm_up: "warm-up.jpg",
+};
+
 function renderGoalCard(goal) {
   const card = makeElement("button", "goal-card");
   card.type = "button";
   card.dataset.goal = goal;
   card.setAttribute("aria-pressed", "false");
 
-  const image = makeElement("span", "goal-image-placeholder");
-  image.setAttribute("role", "img");
-  image.setAttribute("aria-label", `${prettyLabel(goal)} image placeholder`);
-  image.innerHTML = '<svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="15"/><circle cx="24" cy="24" r="8"/><circle cx="24" cy="24" r="2"/><path d="m32 16 8-8m-5 0h5v5"/></svg><span>Image soon</span>';
+  const imageFile = goalImages[goal];
+  const image = makeElement(imageFile ? "img" : "span", imageFile ? "goal-image" : "goal-image-placeholder");
+  if (imageFile) {
+    image.src = `/static/workout-focus/${imageFile}`;
+    image.alt = "";
+    image.loading = "lazy";
+    image.decoding = "async";
+  } else {
+    image.setAttribute("role", "img");
+    image.setAttribute("aria-label", `${prettyLabel(goal)} image placeholder`);
+    image.innerHTML = '<svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="15"/><circle cx="24" cy="24" r="8"/><circle cx="24" cy="24" r="2"/><path d="m32 16 8-8m-5 0h5v5"/></svg><span>Image soon</span>';
+  }
   card.append(image, makeElement("span", "goal-card-label", prettyLabel(goal)));
   card.addEventListener("click", () => selectGoal(goal));
   return card;
