@@ -25,6 +25,7 @@ const activeExerciseKeywords = document.querySelector("#active-exercise-keywords
 const activeStepPrescription = document.querySelector("#active-step-prescription");
 const workoutStepCarousel = document.querySelector("#workout-step-carousel");
 const completeStepButton = document.querySelector("#complete-step-button");
+const finishWorkoutButton = document.querySelector("#finish-workout-button");
 const activeStepMessage = document.querySelector("#active-step-message");
 const activeWorkoutMessage = document.querySelector("#active-workout-message");
 const historyList = document.querySelector("#history-list");
@@ -61,6 +62,9 @@ let currentRecommendationSeed = null;
 let workoutSteps = [];
 let currentWorkoutStepIndex = 0;
 let completedWorkoutSteps = new Set();
+let currentWorkoutSessionId = null;
+let currentWorkoutStructureMode = "block";
+let currentWorkoutNotes = "";
 let libraryExercises = [];
 let libraryLoaded = false;
 let libraryLoading = false;
@@ -311,6 +315,7 @@ function renderCurrentWorkoutStep(message = "") {
   );
   const isComplete = completedWorkoutSteps.has(step.key);
   completeStepButton.textContent = isComplete ? "Mark set incomplete" : "Complete set";
+  finishWorkoutButton.hidden = completedWorkoutSteps.size !== workoutSteps.length;
   activeStepMessage.textContent = message;
   renderWorkoutProgress();
 }
@@ -450,6 +455,9 @@ function renderActiveWorkout(workout, statusMessage) {
   currentGoal = workout.goal;
   currentLevel = workout.level;
   currentEquipment = workout.equipment;
+  currentWorkoutSessionId = workout.session_id;
+  currentWorkoutStructureMode = workout.structure_mode;
+  currentWorkoutNotes = workout.notes || "";
   currentExercises = workout.exercises;
   currentDuration = workout.duration;
   workoutSteps = buildWorkoutSteps(currentExercises);
@@ -533,23 +541,108 @@ function renderExercises() {
   exerciseList.replaceChildren(...currentExercises.map(renderExercise));
 }
 
-completeStepButton.addEventListener("click", () => {
+
+completeStepButton.addEventListener("click", async () => {
   const step = workoutSteps[currentWorkoutStepIndex];
   if (!step) return;
 
-  if (completedWorkoutSteps.has(step.key)) {
-    completedWorkoutSteps.delete(step.key);
-    renderCurrentWorkoutStep("Set marked incomplete.");
+  if (!currentWorkoutSessionId) {
+    activeStepMessage.textContent = "Please start your workout first.";
     return;
   }
 
-  completedWorkoutSteps.add(step.key);
-  const hasNextStep = currentWorkoutStepIndex < workoutSteps.length - 1;
-  if (hasNextStep) currentWorkoutStepIndex += 1;
-  const message = completedWorkoutSteps.size === workoutSteps.length
-    ? "All workout sets are complete."
-    : hasNextStep ? "Set completed. Moving to the next set." : "Set completed.";
-  renderCurrentWorkoutStep(message);
+  // Keep a copy in case saving fails.
+  const previousCompletedSets = new Set(completedWorkoutSteps);
+  const previousStepIndex = currentWorkoutStepIndex;
+
+  if (completedWorkoutSteps.has(step.key)) {
+    completedWorkoutSteps.delete(step.key);
+  } else {
+    completedWorkoutSteps.add(step.key);
+
+    const hasNextStep = currentWorkoutStepIndex < workoutSteps.length - 1;
+    if (hasNextStep) currentWorkoutStepIndex += 1;
+  }
+
+  completeStepButton.disabled = true;
+  activeStepMessage.textContent = "Saving progress...";
+
+  try {
+    await requestJson("/api/active-workout", {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        session_id: currentWorkoutSessionId,
+        structure_mode: currentWorkoutStructureMode,
+        completed_set_keys: [...completedWorkoutSteps],
+        notes: currentWorkoutNotes
+      })
+    });
+
+    const message = completedWorkoutSteps.size === workoutSteps.length
+      ? "All workout sets are complete. Progress saved!"
+      : completedWorkoutSteps.has(step.key)
+        ? "Set completed. Progress saved!"
+        : "Set marked incomplete. Progress saved!";
+
+    renderCurrentWorkoutStep(message);
+
+  } catch (error) {
+    // Restore the previous state if saving fails.
+    completedWorkoutSteps = previousCompletedSets;
+    currentWorkoutStepIndex = previousStepIndex;
+
+    renderCurrentWorkoutStep("Could not save progress: " + error.message);
+  } finally {
+    completeStepButton.disabled = false;
+  }
+});
+
+finishWorkoutButton.addEventListener("click", async () => {
+  if (completedWorkoutSteps.size !== workoutSteps.length) {
+    activeStepMessage.textContent = "Complete all sets before finishing.";
+    return;
+  }
+
+  finishWorkoutButton.disabled = true;
+  activeStepMessage.textContent = "Saving completed workout...";
+
+  try {
+    await requestJson("/api/workouts", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        session_id: currentWorkoutSessionId,
+        structure_mode: currentWorkoutStructureMode,
+        completed_set_keys: [...completedWorkoutSteps],
+        notes: currentWorkoutNotes
+      })
+    });
+
+    currentWorkoutSessionId = null;
+    finishWorkoutButton.hidden = true;
+    continueWorkoutButton.hidden = true;
+    startButton.hidden = false;
+
+    activeWorkoutMessage.textContent = "Workout completed and saved to your history!";
+    activeWorkoutMessage.className = "status-message success";
+
+    closeWorkoutSheet();
+
+await Promise.all([
+  loadHistory(),
+  loadStats()
+]);
+
+  } catch (error) {
+    activeStepMessage.textContent = "Could not finish workout: " + error.message;
+  } finally {
+    finishWorkoutButton.disabled = false;
+  }
 });
 
 function renderEmptyWorkout(goal, level, duration, message) {
@@ -628,6 +721,36 @@ function renderHistory(history) {
       }
     });
     card.append(button);
+
+
+    const redoButton = makeElement("button", "history-redo", "Redo workout");
+    redoButton.type = "button";
+
+    redoButton.addEventListener("click", async () => {
+      redoButton.disabled = true;
+      redoButton.textContent = "Preparing workout...";
+
+      try {
+        const result = await requestJson(
+          `/api/history/${encodeURIComponent(workout.session_id)}/redo`,
+          { method: "POST" }
+        );
+
+        currentWorkoutSessionId = result.active_workout.session_id;
+
+        await loadActiveWorkout();
+
+        historyMessage.textContent = "Your previous workout is ready to redo!";
+      } catch (error) {
+        historyMessage.textContent = error.message;
+      } finally {
+        redoButton.disabled = false;
+        redoButton.textContent = "Redo workout";
+      }
+    });
+
+    card.append(redoButton);
+
     return card;
   }));
 }
@@ -640,6 +763,74 @@ async function loadHistory() {
     historyMessage.textContent = error.message;
   }
 }
+
+
+async function loadStats(period = "week") {
+  try {
+    const stats = await requestJson(`/api/stats?period=${period}`);
+
+    document.querySelector("#stats-period-label").textContent =
+      period === "week" ? "Your progress this week" : "Your progress this month";
+
+    document.querySelector("#stat-sessions").textContent =
+      stats.total_sessions;
+
+    document.querySelector("#stat-days").textContent =
+      stats.workout_days;
+
+    document.querySelector("#stat-minutes").textContent =
+      stats.total_duration;
+
+    document.querySelector("#stat-sets").textContent =
+      stats.total_sets;
+
+    document.querySelector("#stats-message").textContent = "";
+    const chart = document.querySelector("#stats-chart");
+    chart.replaceChildren();
+
+    if (!stats.activity || stats.activity.length === 0) {
+      chart.textContent = "No workouts recorded during this period yet.";
+      return;
+    }
+
+    const maxSessions = Math.max(
+      ...stats.activity.map(day => day.sessions),
+      1
+    );
+
+    stats.activity.forEach(day => {
+      const barContainer = document.createElement("div");
+      barContainer.className = "stats-bar-item";
+
+      const bar = document.createElement("div");
+      bar.className = "stats-bar";
+
+      bar.style.height =
+        `${Math.max((day.sessions / maxSessions) * 100, 5)}%`;
+
+      bar.title = `${day.sessions} workout(s)`;
+
+      const label = document.createElement("span");
+      label.className = "stats-bar-label";
+      label.textContent = day.date.slice(5);
+
+      const count = document.createElement("span");
+      count.className = "stats-bar-count";
+      count.textContent = day.sessions;
+
+      barContainer.append(count, bar, label);
+      chart.appendChild(barContainer);
+    });
+
+  } catch (error) {
+    document.querySelector("#stats-chart").textContent =
+      "Could not load statistics: " + error.message;
+  }
+}
+
+document.querySelector("#stats-period").addEventListener("change", () => {
+  loadStats(document.querySelector("#stats-period").value);
+});
 
 async function loadOptions() {
   try {
@@ -787,8 +978,12 @@ function showPage(pageName) {
     if (active) link.setAttribute("aria-current", "page");
     else link.removeAttribute("aria-current");
   });
-  if (pageName === "tracker") loadHistory();
-  if (pageName === "library") loadLibrary();
+  if (pageName === "tracker") {
+  loadHistory();
+  loadStats();
+}
+
+if (pageName === "library") loadLibrary();
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -823,7 +1018,11 @@ async function showApp(user) {
   welcomeName.textContent = user.first_name ? `${user.first_name}.` : "yourself.";
   document.querySelector("#footer-user").firstElementChild.textContent = `Signed in as ${user.username}`;
   showPage("build");
-  await Promise.all([loadOptions(), loadHistory()]);
+  await Promise.all([
+  loadOptions(),
+  loadHistory(),
+  loadStats()
+]);
   await loadActiveWorkout();
 }
 

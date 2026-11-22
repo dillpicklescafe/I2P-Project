@@ -34,6 +34,7 @@ from workout_storage import (
     get_active_workout,
     get_workout_by_id,
     get_workout_history,
+    get_workout_stats,
     initialize_database,
     save_active_workout,
     save_workout,
@@ -257,6 +258,100 @@ def build_active_workout(data, db_path=DATABASE_NAME, user_id=None):
     save_active_workout(user_id, active_workout, db_path)
     return active_workout
 
+
+def build_redo_workout(session_id, db_path=DATABASE_NAME, user_id=None):
+    """Create a fresh active workout from a previously completed workout."""
+
+    if not isinstance(user_id, int) or isinstance(user_id, bool) or user_id <= 0:
+        raise ValueError("User ID must be a positive integer.")
+
+    # Do not overwrite an unfinished workout.
+    existing_active = get_active_workout(user_id, db_path)
+    if existing_active is not None:
+        raise ValueError(
+            "You already have an unfinished workout. Finish it before redoing another workout."
+        )
+
+    # Retrieve the original completed workout.
+    original = get_workout_by_id(
+        session_id,
+        db_path,
+        user_id=user_id,
+    )
+
+    if original is None or not original["completed"]:
+        raise ValueError("Completed workout not found.")
+
+    exercise_by_id = {
+        exercise["id"]: exercise
+        for exercise in exercises
+    }
+
+    rebuilt_exercises = []
+
+    for record in original["exercises"]:
+        exercise = exercise_by_id.get(record["exercise_id"])
+
+        if exercise is None:
+            raise ValueError(
+                f"Exercise ID {record['exercise_id']} is no longer available."
+            )
+
+        media = get_exercise_media(exercise["id"])
+        media_url = None
+        media_type = None
+
+        if media and (STATIC_DIR / media["media_path"]).is_file():
+            media_url = "/static/" + media["media_path"].replace("\\", "/")
+            media_type = media["media_type"]
+
+        rebuilt_exercises.append({
+            "id": exercise["id"],
+            "name": exercise["name"],
+            "keywords": get_exercise_keywords(exercise),
+            "level": exercise["level"],
+            "sets": exercise["sets"],
+            "reps": exercise.get("reps"),
+            "hold_seconds": exercise.get("hold_seconds"),
+            "work_seconds": exercise.get("work_seconds"),
+            "rest_seconds": exercise.get("rest_seconds"),
+            "duration": exercise["duration"],
+            "instructions": exercise["instructions"],
+            "equipment": exercise["equipment"],
+            "media_url": media_url,
+            "media_type": media_type,
+        })
+
+    if not rebuilt_exercises:
+        raise ValueError("This workout has no exercises to redo.")
+
+    active_workout = {
+        "version": 1,
+        "session_id": secrets.token_urlsafe(24),
+        "goal": original["goal"],
+        "level": rebuilt_exercises[0]["level"],
+        "duration": min(
+            180,
+            max(
+                15,
+                ((sum(exercise["duration"] for exercise in rebuilt_exercises) + 14) // 15) * 15
+        )
+),
+        "equipment": list(dict.fromkeys(
+            item
+            for exercise in rebuilt_exercises
+            for item in exercise["equipment"]
+        )),
+        "exercises": rebuilt_exercises,
+        "structure_mode": "block",
+        "completed_set_keys": [],
+        "saved": False,
+        "notes": "",
+    }
+
+    save_active_workout(user_id, active_workout, db_path)
+
+    return active_workout
 
 def update_active_workout_progress(active_workout, data):
     """Validate and apply progress updates to a user's active workout."""
@@ -595,6 +690,54 @@ def create_app(test_config=None):
             return jsonify(error="Workout not found."), 404
         return jsonify(workout)
 
+    
+    @app.post("/api/history/<session_id>/redo")
+    @authenticated_api
+    def redo_user_workout(session_id):
+        try:
+            # Check whether the user already has an unfinished workout.
+            active_workout = get_active_workout(
+                session["user_id"],
+                app.config["DATABASE"],
+            )
+
+            if active_workout is not None:
+                return jsonify(
+                    error="Finish your current workout before redoing another one."
+                ), 409
+
+            workout = build_redo_workout(
+                session_id,
+                app.config["DATABASE"],
+                user_id=session["user_id"],
+            )
+
+            return jsonify(active_workout=workout), 201
+
+        except ValueError as error:
+            return jsonify(error=str(error)), 404
+
+        except sqlite3.Error:
+            return database_error()
+
+    @app.get("/api/stats")
+    @authenticated_api
+    def workout_statistics():
+        period = request.args.get("period", "week")
+
+        try:
+            stats = get_workout_stats(
+                period=period,
+                db_path=app.config["DATABASE"],
+                user_id=session["user_id"],
+            )
+            return jsonify(stats)
+        except ValueError as error:
+            return jsonify(error=str(error)), 400
+        except sqlite3.Error:
+            return database_error()
+
+        
     @app.post("/api/workouts")
     @authenticated_api
     def save_user_workout():
@@ -605,24 +748,35 @@ def create_app(test_config=None):
                 app.config["DATABASE"],
             )
             session_id = None
+
             if active_workout is not None:
                 progress = update_active_workout_progress(active_workout, data)
                 completed_counts = {}
+
                 for key in progress["completed_set_keys"]:
                     exercise_id, _ = key.split(":", 1)
                     exercise_id = int(exercise_id)
-                    completed_counts[exercise_id] = completed_counts.get(exercise_id, 0) + 1
+                    completed_counts[exercise_id] = (
+                        completed_counts.get(exercise_id, 0) + 1
+                    )
+
                 data = {
                     "goal": active_workout["goal"],
                     "completed_sets": [
-                        {"exercise_id": exercise_id, "sets_completed": sets_completed}
+                        {
+                            "exercise_id": exercise_id,
+                            "sets_completed": sets_completed,
+                        }
                         for exercise_id, sets_completed in completed_counts.items()
                     ],
                     "notes": progress["notes"],
                 }
                 session_id = active_workout["session_id"]
+
             elif "session_id" in data:
-                return jsonify(error="This active workout no longer exists. Reload the page."), 409
+                return jsonify(
+                    error="This active workout no longer exists. Reload the page."
+                ), 409
 
             session_id = save_completed_workout(
                 data,
@@ -630,11 +784,14 @@ def create_app(test_config=None):
                 user_id=session["user_id"],
                 session_id=session_id,
             )
+
         except (ValueError, TypeError) as error:
             return jsonify(error=str(error)), 400
         except sqlite3.Error:
             return database_error()
+
         return jsonify(session_id=session_id), 201
+
 
     return app
 

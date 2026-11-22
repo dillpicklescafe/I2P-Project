@@ -2,6 +2,7 @@
 import json
 import sqlite3
 from contextlib import closing
+from datetime import date, timedelta
 
 
 DATABASE_NAME = "fitness_tracker.db"
@@ -370,3 +371,80 @@ def get_workout_by_id(session_id, db_path=DATABASE_NAME, user_id=None):
     result["exercises"] = [dict(row) for row in exercises]
 
     return result
+
+
+from datetime import date, timedelta
+
+
+def get_workout_stats(period="week", db_path=DATABASE_NAME, user_id=None):
+    """Return workout totals and daily activity for the current week or month."""
+    if period not in ("week", "month"):
+        raise ValueError("Period must be 'week' or 'month'.")
+
+    today = date.today()
+
+    if period == "week":
+        start_date = today - timedelta(days=today.weekday())
+        end_date = start_date + timedelta(days=7)
+    else:
+        start_date = today.replace(day=1)
+        if today.month == 12:
+            end_date = date(today.year + 1, 1, 1)
+        else:
+            end_date = date(today.year, today.month + 1, 1)
+
+    initialize_database(db_path)
+
+    with closing(sqlite3.connect(db_path)) as connection:
+        connection.row_factory = sqlite3.Row
+
+        user_filter = ""
+        parameters = [start_date.isoformat(), end_date.isoformat()]
+
+        if user_id is not None:
+            user_filter = " AND w.user_id = ?"
+            parameters.append(user_id)
+
+        totals = connection.execute("""
+            SELECT
+                COUNT(DISTINCT w.session_id) AS total_sessions,
+                COUNT(DISTINCT date(w.date)) AS workout_days,
+                COALESCE(SUM(e.duration_minutes), 0) AS total_duration,
+                COALESCE(SUM(e.sets_completed), 0) AS total_sets
+            FROM workouts w
+            LEFT JOIN workout_exercises e
+                ON w.session_id = e.session_id
+            WHERE w.completed = 1
+              AND date(w.date) >= date(?)
+              AND date(w.date) < date(?)
+        """ + user_filter, parameters).fetchone()
+
+        activity = connection.execute("""
+            SELECT
+                date(w.date) AS workout_date,
+                COUNT(DISTINCT w.session_id) AS sessions
+            FROM workouts w
+            WHERE w.completed = 1
+              AND date(w.date) >= date(?)
+              AND date(w.date) < date(?)
+        """ + user_filter + """
+            GROUP BY date(w.date)
+            ORDER BY date(w.date)
+        """, parameters).fetchall()
+
+    return {
+        "period": period,
+        "start_date": start_date.isoformat(),
+        "end_date": (end_date - timedelta(days=1)).isoformat(),
+        "total_sessions": totals["total_sessions"],
+        "workout_days": totals["workout_days"],
+        "total_duration": round(totals["total_duration"], 2),
+        "total_sets": totals["total_sets"],
+        "activity": [
+            {
+                "date": row["workout_date"],
+                "sessions": row["sessions"],
+            }
+            for row in activity
+        ],
+    }
