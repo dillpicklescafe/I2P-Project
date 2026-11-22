@@ -59,6 +59,11 @@ const libraryStatus = document.querySelector("#library-status");
 const libraryResultCount = document.querySelector("#library-result-count");
 const libraryExerciseGrid = document.querySelector("#library-exercise-grid");
 const libraryEmpty = document.querySelector("#library-empty");
+const exerciseHoverPreview = document.querySelector("#exercise-hover-preview");
+const exerciseHoverPreviewContent = document.querySelector("#exercise-hover-preview-content");
+const exercisePreviewDialog = document.querySelector("#exercise-preview-dialog");
+const exercisePreviewDialogContent = document.querySelector("#exercise-preview-dialog-content");
+const exercisePreviewCloseButton = document.querySelector("#exercise-preview-close");
 let currentGoal = "";
 let currentLevel = "";
 let currentEquipment = [];
@@ -215,6 +220,9 @@ function isValidStoredExercise(exercise) {
     && optionalNumber(exercise.work_seconds)
     && optionalNumber(exercise.rest_seconds)
     && typeof exercise.level === "string"
+    && (exercise.goals === undefined
+      || (Array.isArray(exercise.goals)
+        && exercise.goals.every((goal) => typeof goal === "string")))
     && (exercise.keywords === undefined
       || (Array.isArray(exercise.keywords)
         && exercise.keywords.every((keyword) => typeof keyword === "string")))
@@ -290,11 +298,303 @@ function createExerciseMedia(
   if (exercise.media_url) {
     const image = makeElement("img", mediaClass);
     image.src = exercise.media_url;
-    image.alt = `${exercise.name} demonstration`;
+    const isStaticIllustration = ["jpg", "jpeg", "png", "webp"]
+      .includes(exercise.media_type);
+    image.alt = isStaticIllustration
+      ? `${exercise.name} key-position illustration`
+      : `${exercise.name} demonstration`;
     return image;
   }
   return makeElement("div", placeholderClass, "Demo coming soon");
 }
+
+function populateExercisePreview(container, exercise, titleId) {
+  const preview = makeElement("article", "exercise-preview");
+  const mediaFrame = makeElement("div", "exercise-preview-visual");
+  mediaFrame.append(createExerciseMedia(
+    exercise,
+    "exercise-preview-media",
+    "exercise-preview-placeholder",
+    true,
+    true
+  ));
+  preview.append(mediaFrame);
+
+  const details = makeElement("div", "exercise-preview-details");
+  const heading = makeElement("div", "exercise-preview-heading");
+  const title = makeElement("h2", "exercise-preview-title", exercise.name);
+  title.id = titleId;
+  heading.append(title);
+  details.append(heading);
+
+  const stats = makeElement("dl", "exercise-preview-stats");
+  const facts = makeElement("dl", "exercise-preview-facts");
+  const addInformation = (container, label, value, className) => {
+    if (value === null || value === undefined || value === "") return;
+    const item = makeElement("div", className);
+    item.append(
+      makeElement("dt", "", label),
+      makeElement("dd", "", value)
+    );
+    container.append(item);
+  };
+  const addStat = (label, value) => {
+    addInformation(stats, label, value, "exercise-preview-stat");
+  };
+  const addFact = (label, value) => {
+    addInformation(facts, label, value, "exercise-preview-fact");
+  };
+
+  if (typeof exercise.level === "string" && exercise.level) {
+    addStat("Difficulty", prettyLabel(exercise.level));
+  }
+  if (Number.isFinite(exercise.duration)) {
+    addStat("Duration", `${exercise.duration} min`);
+  }
+  if (Number.isFinite(exercise.sets)) {
+    addStat("Sets", String(exercise.sets));
+  }
+  if (Number.isFinite(exercise.reps)) {
+    addStat("Reps", String(exercise.reps));
+  } else if (Number.isFinite(exercise.hold_seconds)) {
+    addStat("Hold", `${exercise.hold_seconds} sec`);
+  } else if (Number.isFinite(exercise.work_seconds)) {
+    addStat("Work", `${exercise.work_seconds} sec`);
+  }
+  if (stats.children.length) details.append(stats);
+
+  if (Array.isArray(exercise.body_area) && exercise.body_area.length) {
+    addFact("Target muscles", exercise.body_area.map(prettyLabel).join(", "));
+  }
+  if (Array.isArray(exercise.equipment)) {
+    addFact(
+      "Equipment",
+      exercise.equipment.length
+        ? exercise.equipment.map(prettyLabel).join(", ")
+        : "None required"
+    );
+  }
+  if (Number.isFinite(exercise.rest_seconds) && exercise.rest_seconds > 0) {
+    addFact("Rest between sets", `${exercise.rest_seconds} sec`);
+  }
+  if (facts.children.length) details.append(facts);
+
+  if (Array.isArray(exercise.instructions) && exercise.instructions.length) {
+    const instructions = makeElement("section", "exercise-preview-instructions");
+    instructions.append(makeElement("h3", "", "How to Perform"));
+    const steps = makeElement("ol");
+    exercise.instructions.forEach((instruction) => {
+      steps.append(makeElement("li", "", instruction));
+    });
+    instructions.append(steps);
+    details.append(instructions);
+  }
+
+  preview.append(details);
+  container.replaceChildren(preview);
+}
+
+const exercisePreviewHoverQuery = window.matchMedia("(hover: hover) and (pointer: fine)");
+let exercisePreviewOpenTimer = null;
+let exercisePreviewCloseTimer = null;
+let exercisePreviewHideTimer = null;
+let activeExercisePreviewTrigger = null;
+let activeExercisePreviewData = null;
+let exercisePreviewReturnFocus = null;
+
+function clearExercisePreviewTimers() {
+  window.clearTimeout(exercisePreviewOpenTimer);
+  window.clearTimeout(exercisePreviewCloseTimer);
+  window.clearTimeout(exercisePreviewHideTimer);
+  exercisePreviewOpenTimer = null;
+  exercisePreviewCloseTimer = null;
+  exercisePreviewHideTimer = null;
+}
+
+function closeExerciseHoverPreview(immediate = false) {
+  clearExercisePreviewTimers();
+  exerciseHoverPreview.classList.remove("is-visible");
+  exerciseHoverPreview.setAttribute("aria-hidden", "true");
+  const finishClosing = () => {
+    if (exerciseHoverPreview.classList.contains("is-visible")) return;
+    exerciseHoverPreview.hidden = true;
+    exerciseHoverPreviewContent.replaceChildren();
+    activeExercisePreviewTrigger = null;
+    activeExercisePreviewData = null;
+    exercisePreviewHideTimer = null;
+  };
+  if (immediate || exerciseHoverPreview.hidden) finishClosing();
+  else exercisePreviewHideTimer = window.setTimeout(finishClosing, 180);
+}
+
+function positionExerciseHoverPreview() {
+  if (exerciseHoverPreview.hidden || !activeExercisePreviewTrigger) return;
+
+  const anchor = activeExercisePreviewTrigger.getBoundingClientRect();
+  const panel = exerciseHoverPreview.getBoundingClientRect();
+  const padding = 12;
+  const gap = 14;
+  const maxLeft = Math.max(padding, window.innerWidth - panel.width - padding);
+  const maxTop = Math.max(padding, window.innerHeight - panel.height - padding);
+  let left = anchor.right + gap;
+
+  if (left + panel.width > window.innerWidth - padding) {
+    left = anchor.left - panel.width - gap;
+  }
+  if (left < padding || left > maxLeft) {
+    left = Math.min(
+      maxLeft,
+      Math.max(padding, anchor.left + (anchor.width - panel.width) / 2)
+    );
+  }
+
+  let top = anchor.top;
+  if (top + panel.height > window.innerHeight - padding) {
+    top = anchor.bottom - panel.height;
+  }
+  top = Math.min(maxTop, Math.max(padding, top));
+  exerciseHoverPreview.style.left = `${left}px`;
+  exerciseHoverPreview.style.top = `${top}px`;
+}
+
+function showExerciseHoverPreview(trigger, exercise) {
+  if (exercisePreviewDialog.open) return;
+  clearExercisePreviewTimers();
+  activeExercisePreviewTrigger = trigger;
+  activeExercisePreviewData = exercise;
+  exerciseHoverPreview.hidden = false;
+  exerciseHoverPreview.setAttribute("aria-hidden", "false");
+  exerciseHoverPreview.setAttribute(
+    "aria-label",
+    `${exercise.name} exercise preview`
+  );
+  populateExercisePreview(
+    exerciseHoverPreviewContent,
+    exercise,
+    "exercise-hover-preview-title"
+  );
+  positionExerciseHoverPreview();
+  exerciseHoverPreview.getBoundingClientRect();
+  exerciseHoverPreview.classList.add("is-visible");
+}
+
+function scheduleExerciseHoverPreview(trigger, exercise) {
+  window.clearTimeout(exercisePreviewOpenTimer);
+  window.clearTimeout(exercisePreviewCloseTimer);
+  if (
+    !exerciseHoverPreview.hidden
+    && exerciseHoverPreview.classList.contains("is-visible")
+    && activeExercisePreviewTrigger === trigger
+  ) return;
+
+  exercisePreviewOpenTimer = window.setTimeout(
+    () => showExerciseHoverPreview(trigger, exercise),
+    250
+  );
+}
+
+function scheduleExerciseHoverPreviewClose() {
+  window.clearTimeout(exercisePreviewCloseTimer);
+  exercisePreviewCloseTimer = window.setTimeout(() => {
+    const triggerHovered = activeExercisePreviewTrigger
+      && activeExercisePreviewTrigger.matches(":hover");
+    const triggerFocused = activeExercisePreviewTrigger
+      && activeExercisePreviewTrigger.contains(document.activeElement);
+    if (
+      !triggerHovered
+      && !triggerFocused
+      && !exerciseHoverPreview.matches(":hover")
+    ) {
+      closeExerciseHoverPreview();
+    }
+  }, 220);
+}
+
+function openExercisePreviewDialog(trigger, exercise) {
+  clearExercisePreviewTimers();
+  closeExerciseHoverPreview(true);
+  exercisePreviewReturnFocus = trigger;
+  populateExercisePreview(
+    exercisePreviewDialogContent,
+    exercise,
+    "exercise-preview-dialog-title"
+  );
+  exercisePreviewDialog.showModal();
+}
+
+function attachExercisePreview(card, exercise) {
+  card.tabIndex = 0;
+  card.setAttribute("role", "button");
+  card.setAttribute("aria-haspopup", "dialog");
+  card.setAttribute("aria-controls", "exercise-preview-dialog");
+  card.setAttribute("aria-label", `Open exercise preview for ${exercise.name}`);
+
+  card.addEventListener("pointerenter", (event) => {
+    if (exercisePreviewHoverQuery.matches && event.pointerType !== "touch") {
+      scheduleExerciseHoverPreview(card, exercise);
+    }
+  });
+  card.addEventListener("pointerleave", () => {
+    if (exercisePreviewHoverQuery.matches) scheduleExerciseHoverPreviewClose();
+  });
+  card.addEventListener("focusin", () => {
+    showExerciseHoverPreview(card, exercise);
+  });
+  card.addEventListener("focusout", scheduleExerciseHoverPreviewClose);
+  card.addEventListener("click", () => {
+    if (!exercisePreviewDialog.open) openExercisePreviewDialog(card, exercise);
+  });
+  card.addEventListener("keydown", (event) => {
+    if (event.target !== card || !["Enter", " "].includes(event.key)) return;
+    event.preventDefault();
+    if (!exercisePreviewDialog.open) openExercisePreviewDialog(card, exercise);
+  });
+}
+
+exerciseHoverPreview.addEventListener("pointerenter", () => {
+  window.clearTimeout(exercisePreviewCloseTimer);
+  window.clearTimeout(exercisePreviewHideTimer);
+  exercisePreviewCloseTimer = null;
+  exercisePreviewHideTimer = null;
+  exerciseHoverPreview.classList.add("is-visible");
+  exerciseHoverPreview.setAttribute("aria-hidden", "false");
+});
+exerciseHoverPreview.addEventListener("pointerleave", scheduleExerciseHoverPreviewClose);
+exerciseHoverPreview.addEventListener("click", () => {
+  if (activeExercisePreviewTrigger && activeExercisePreviewData) {
+    openExercisePreviewDialog(
+      activeExercisePreviewTrigger,
+      activeExercisePreviewData
+    );
+  }
+});
+exercisePreviewCloseButton.addEventListener("click", () => {
+  exercisePreviewDialog.close();
+});
+exercisePreviewDialog.addEventListener("click", (event) => {
+  if (event.target === exercisePreviewDialog) exercisePreviewDialog.close();
+});
+exercisePreviewDialog.addEventListener("close", () => {
+  exercisePreviewDialogContent.replaceChildren();
+  if (exercisePreviewReturnFocus?.isConnected) exercisePreviewReturnFocus.focus();
+  exercisePreviewReturnFocus = null;
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && exercisePreviewDialog.open) {
+    event.preventDefault();
+    exercisePreviewDialog.close();
+    return;
+  }
+  if (
+    event.key === "Escape"
+    && !exercisePreviewDialog.open
+    && !exerciseHoverPreview.hidden
+  ) {
+    closeExerciseHoverPreview();
+  }
+});
+window.addEventListener("resize", positionExerciseHoverPreview);
+window.addEventListener("scroll", positionExerciseHoverPreview, true);
 
 function renderCurrentWorkoutStep(message = "") {
   const step = workoutSteps[currentWorkoutStepIndex];
@@ -532,6 +832,7 @@ function hideGeneratedWorkout() {
 
 function renderExercise(exercise) {
   const card = makeElement("article", "exercise-card");
+  card.dataset.exerciseId = String(exercise.id);
   card.append(createExerciseMedia(exercise));
 
   const content = makeElement("div", "exercise-content");
@@ -572,10 +873,12 @@ function renderExercise(exercise) {
   }
   content.append(specifics);
   card.append(content);
+  attachExercisePreview(card, exercise);
   return card;
 }
 
 function renderExercises() {
+  closeExerciseHoverPreview();
   exerciseList.replaceChildren(...currentExercises.map(renderExercise));
 }
 
@@ -691,6 +994,7 @@ function renderEmptyWorkout(goal, level, duration, message) {
   document.querySelector("#workout-focus").textContent = prettyLabel(goal);
   document.querySelector("#workout-level").textContent = prettyLabel(level);
   document.querySelector("#workout-duration").textContent = `${duration} minutes`;
+  closeExerciseHoverPreview();
   exerciseList.replaceChildren();
   const noResults = document.querySelector("#no-results");
   noResults.hidden = false;
@@ -968,12 +1272,14 @@ function renderLibraryFilterOptions(container, options, selectedValues) {
 
 function renderLibraryExercise(exercise) {
   const card = makeElement("article", "library-exercise-card");
+  card.dataset.exerciseId = String(exercise.id);
   card.append(createExerciseThumbnail(
     exercise,
     "library-exercise-media",
     "library-exercise-placeholder"
   ));
   card.append(makeElement("h3", "library-exercise-title", exercise.name));
+  attachExercisePreview(card, exercise);
   return card;
 }
 
@@ -1006,6 +1312,7 @@ function filterLibraryExercises() {
   libraryResultCount.textContent = `${filteredExercises.length} ${
     filteredExercises.length === 1 ? "exercise" : "exercises"
   }`;
+  closeExerciseHoverPreview();
   libraryExerciseGrid.replaceChildren(...filteredExercises.map(renderLibraryExercise));
   libraryEmpty.hidden = filteredExercises.length > 0;
 }
@@ -1075,6 +1382,7 @@ function showPage(pageName) {
   const page = document.querySelector(`#page-${pageName}`);
   if (!page) return;
 
+  closeExerciseHoverPreview();
   document.querySelectorAll(".app-page").forEach((section) => {
     section.hidden = section !== page;
   });
@@ -1211,6 +1519,7 @@ logoutButton.addEventListener("click", async () => {
     startButton.hidden = true;
     saveAndClearButton.hidden = true;
     continueWorkoutButton.hidden = true;
+    closeExerciseHoverPreview();
     exerciseList.replaceChildren();
     activeWorkoutMessage.textContent = "";
     historyList.replaceChildren(makeElement("p", "field-hint", "Log in to see your saved workouts."));
