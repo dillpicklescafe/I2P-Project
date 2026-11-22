@@ -1,5 +1,8 @@
 import unittest
 
+from audit_workout_coverage import run_coverage_audit
+from exercises import all_exercises
+from exercises import excluded_recommendation_ids
 from exercises import exercises
 from recommendation import calculate_interval_seconds
 from recommendation import calculate_workout_duration
@@ -21,28 +24,24 @@ REQUIRED_FIELDS = [
 class ExerciseDatabaseTests(unittest.TestCase):
     def test_original_source_ids_are_preserved(self):
         ids = []
-        for exercise in exercises:
+        for exercise in all_exercises:
             ids.append(exercise["id"])
-        excluded_ids = {
-            31, 38, 41, 44, 45, 48, 50, 54, 55, 57,
-            58, 59, 62, 63, 64, 67, 69, 72, 73, 74,
-            75, 77, 84, 87, 90, 97, 103, 104, 112, 113,
-            114, 117, 119, 124, 126, 128, 132, 133, 135, 136
-        }
-        expected_ids = []
-        for source_id in range(1, 151):
-            if source_id not in excluded_ids:
-                expected_ids.append(source_id)
-        self.assertEqual(ids, expected_ids)
+        self.assertEqual(ids[:150], list(range(1, 151)))
+        self.assertEqual(ids[150:], list(range(151, 177)))
+        self.assertEqual(
+            {exercise["id"] for exercise in all_exercises}
+            - {exercise["id"] for exercise in exercises},
+            set(excluded_recommendation_ids),
+        )
 
     def test_names_are_unique(self):
         names = []
-        for exercise in exercises:
+        for exercise in all_exercises:
             names.append(exercise["name"])
         self.assertEqual(len(names), len(set(names)))
 
     def test_required_fields_and_types(self):
-        for exercise in exercises:
+        for exercise in all_exercises:
             for field in REQUIRED_FIELDS:
                 self.assertIn(field, exercise)
             self.assertIsInstance(exercise["id"], int)
@@ -56,9 +55,9 @@ class ExerciseDatabaseTests(unittest.TestCase):
 
     def test_variations_exist_when_provided(self):
         names = []
-        for exercise in exercises:
+        for exercise in all_exercises:
             names.append(exercise["name"])
-        for exercise in exercises:
+        for exercise in all_exercises:
             for field in ["easier_variation", "harder_variation"]:
                 variation = exercise[field]
                 self.assertTrue(variation is None or variation in names)
@@ -133,15 +132,12 @@ class RecommendationTests(unittest.TestCase):
                 self.assertEqual(exercise["level"], level)
                 self.assertTrue(set(exercise["equipment"]).issubset(equipment))
 
-        self.assertEqual(
-            recommend_workout(
-                "lower_body_strength",
-                "advanced",
-                ["bar", "bench", "chair", "dumbbells", "resistance_band", "step", "wall"],
-                180,
-            ),
-            [],
-        )
+        self.assertTrue(recommend_workout(
+            "lower_body_strength",
+            "advanced",
+            ["bar", "bench", "chair", "dumbbells", "resistance_band", "step", "wall"],
+            180,
+        ))
 
     def test_selected_equipment_is_prioritized_over_bodyweight(self):
         workout = recommend_workout(
@@ -206,10 +202,48 @@ class RecommendationTests(unittest.TestCase):
 
     def test_option_helpers_return_database_values(self):
         self.assertIn("cardio", get_available_goals())
-        self.assertEqual(get_available_levels("first_pushup"), ["beginner"])
-        self.assertEqual(get_available_levels(), ["beginner", "intermediate"])
-        self.assertNotIn("advanced", get_available_levels("cardio"))
+        self.assertIn("advanced", get_available_levels("first_pushup"))
+        self.assertEqual(get_available_levels(), ["beginner", "intermediate", "advanced"])
+        self.assertIn("advanced", get_available_levels("cardio"))
         self.assertIn("dumbbells", get_available_equipment())
+        self.assertNotIn("ball", get_available_equipment())
+
+    def test_ball_exercise_is_preserved_but_never_recommended(self):
+        source_record = next(
+            exercise for exercise in all_exercises if exercise["id"] == 132
+        )
+        self.assertEqual(source_record["name"], "Single-leg Ball Pass")
+        self.assertEqual(source_record["equipment"], ["ball"])
+        self.assertNotIn(132, {exercise["id"] for exercise in exercises})
+        for goal in get_available_goals():
+            for level in ["beginner", "intermediate", "advanced"]:
+                workout = recommend_workout(
+                    goal, level, get_available_equipment(), 180, shuffle=False
+                )
+                self.assertNotIn(132, {exercise["id"] for exercise in workout})
+
+    def test_every_supported_input_combination_generates_a_valid_plan(self):
+        report = run_coverage_audit()
+        self.assertEqual(report["tested"], 14 * 3 * 12 * (2 ** 7))
+        self.assertEqual(report["failures"], [])
+        self.assertEqual(report["passing"], report["tested"])
+        self.assertGreaterEqual(report["minimum_unique_exercises"], 3)
+        for result in report["combinations"]:
+            self.assertGreaterEqual(result["unique_exercise_count"], 3)
+            self.assertLessEqual(result["actual_duration"], result["duration"])
+
+    def test_sparse_plans_have_three_distinct_ids_even_when_shuffled(self):
+        requests = [
+            ("posture", "advanced"),
+            ("balance", "advanced"),
+            ("first_pushup", "intermediate"),
+            ("accessibility", "advanced"),
+        ]
+        for goal, level in requests:
+            for seed in range(10):
+                workout = recommend_workout(goal, level, [], 15, random_seed=seed)
+                self.assertGreaterEqual(len({exercise["id"] for exercise in workout}), 3)
+                self.assertLessEqual(calculate_workout_duration(workout), 15)
 
 
 if __name__ == "__main__":

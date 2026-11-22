@@ -108,6 +108,7 @@ def build_recommendation(data, random_seed=None):
         result.append({
             "id": exercise["id"],
             "name": exercise["name"],
+            "goals": exercise["goals"],
             "keywords": get_exercise_keywords(exercise),
             "level": exercise["level"],
             "sets": exercise["sets"],
@@ -561,9 +562,18 @@ def create_app(test_config=None):
             library_exercises.append({
                 "id": exercise["id"],
                 "name": exercise["name"],
+                "goals": exercise["goals"],
+                "level": exercise["level"],
                 "body_area": exercise["body_area"],
                 "equipment": exercise["equipment"],
                 "type": exercise["type"],
+                "duration": exercise["duration"],
+                "sets": exercise["sets"],
+                "reps": exercise.get("reps"),
+                "hold_seconds": exercise.get("hold_seconds"),
+                "work_seconds": exercise.get("work_seconds"),
+                "rest_seconds": exercise.get("rest_seconds"),
+                "instructions": exercise["instructions"],
                 "media_url": media_url,
                 "media_type": media_type,
             })
@@ -604,15 +614,12 @@ def create_app(test_config=None):
                 app.config["DATABASE"],
             )
             if workout is not None:
+                exercises_by_id = {exercise["id"]: exercise for exercise in exercises}
                 for planned_exercise in workout["exercises"]:
+                    source = exercises_by_id.get(planned_exercise["id"])
+                    if source is not None and "goals" not in planned_exercise:
+                        planned_exercise["goals"] = source["goals"]
                     if "keywords" not in planned_exercise:
-                        source = next(
-                            (
-                                exercise for exercise in exercises
-                                if exercise["id"] == planned_exercise["id"]
-                            ),
-                            None,
-                        )
                         if source is not None:
                             planned_exercise["keywords"] = get_exercise_keywords(source)
             return jsonify(active_workout=workout)

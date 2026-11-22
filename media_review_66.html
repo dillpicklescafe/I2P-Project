@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LockIn — Missing Media Review</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --ink: #182033; --muted: #667085; --line: #d7ddea; --paper: #ffffff;
+      --canvas: #eef2f7; --blue: #2457d6; --blue-soft: #e8efff;
+      --green: #157347; --green-soft: #e4f5ec; --red: #b42318; --red-soft: #fee9e7;
+      --amber: #945d00; --amber-soft: #fff3d6;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--canvas); color: var(--ink); font-size: 16px; }
+    button { font: inherit; }
+    .app-header { background: #101828; color: white; padding: 22px max(20px, calc((100vw - 1240px) / 2)); }
+    .eyebrow { color: #a9bfff; font-size: .84rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+    h1 { margin: 5px 0 8px; font-size: clamp(1.55rem, 3vw, 2.35rem); }
+    .subtitle { max-width: 850px; margin: 0; color: #d0d5dd; line-height: 1.55; }
+    .toolbar { max-width: 1240px; margin: 0 auto; padding: 18px 20px 0; }
+    .summary { display: grid; grid-template-columns: repeat(5, minmax(110px, 1fr)); gap: 10px; }
+    .stat { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 11px 13px; }
+    .stat-label { display: block; color: var(--muted); font-size: .8rem; font-weight: 750; }
+    .stat strong { display: block; margin-top: 2px; font-size: 1.25rem; }
+    .progress-track { height: 8px; margin-top: 12px; background: #dce2ec; border-radius: 10px; overflow: hidden; }
+    #progress-bar { display: block; height: 100%; width: 0; background: var(--blue); transition: width .2s ease; }
+    main { max-width: 1240px; margin: 18px auto; padding: 0 20px 32px; }
+    .review-shell { background: var(--paper); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; box-shadow: 0 12px 35px #18203314; }
+    .review-top { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; padding: 22px; border-bottom: 1px solid var(--line); }
+    .review-top h2 { margin: 3px 0 8px; font-size: 1.65rem; }
+    .badges { display: flex; flex-wrap: wrap; gap: 7px; }
+    .badge { border-radius: 999px; padding: 5px 10px; background: #f2f4f7; color: #344054; font-size: .84rem; font-weight: 700; }
+    .position { color: var(--muted); font-size: .92rem; }
+    .counter { min-width: max-content; color: var(--muted); font-weight: 700; }
+    .compare { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); }
+    .lockin-panel, .candidate-panel { padding: 22px; min-width: 0; }
+    .candidate-panel { border-left: 1px solid var(--line); background: #fafbfc; }
+    .section-label { color: var(--muted); font-size: .79rem; font-weight: 850; letter-spacing: .07em; text-transform: uppercase; }
+    ol { margin: 13px 0 0; padding-left: 25px; line-height: 1.58; }
+    li + li { margin-top: 8px; }
+    .candidate-heading { display: flex; justify-content: space-between; gap: 10px; align-items: start; }
+    .candidate-heading h3 { margin: 4px 0 3px; font-size: 1.25rem; }
+    .source { margin: 0 0 14px; color: var(--muted); font-size: .9rem; }
+    .media-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    figure { margin: 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: white; }
+    figure img, figure video { display: block; width: 100%; height: 290px; object-fit: contain; background: #edf3f8; }
+    figcaption { padding: 7px 9px; color: var(--muted); font-size: .82rem; text-align: center; }
+    .warning { margin: 14px 0 0; padding: 11px 13px; background: var(--amber-soft); border-left: 5px solid #e5a000; color: #5d3b00; line-height: 1.45; }
+    .mismatch-list { margin: 12px 0 0; display: grid; gap: 7px; }
+    .mismatch { background: var(--red-soft); color: #7a271a; border-radius: 8px; padding: 8px 10px; font-size: .9rem; }
+    .mismatch strong { text-transform: capitalize; }
+    .no-candidate { min-height: 360px; display: grid; place-items: center; text-align: center; border: 2px dashed var(--line); border-radius: 14px; padding: 30px; background: white; }
+    .no-candidate strong { display: block; font-size: 1.15rem; margin-bottom: 8px; }
+    .no-candidate p { max-width: 500px; color: var(--muted); line-height: 1.55; }
+    .decision-bar { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 17px 22px; border-top: 1px solid var(--line); }
+    .decision-actions, .navigation, .utility { display: flex; flex-wrap: wrap; gap: 9px; }
+    button { border: 1px solid transparent; border-radius: 9px; padding: 10px 15px; cursor: pointer; font-weight: 750; }
+    button:focus-visible { outline: 3px solid #84adff; outline-offset: 2px; }
+    button:disabled { cursor: not-allowed; opacity: .43; }
+    .approve { background: var(--green); color: white; }
+    .decline { background: var(--red); color: white; }
+    .skip { background: #e4e7ec; color: #344054; }
+    .nav-button { background: white; border-color: var(--line); color: var(--ink); }
+    .primary { background: var(--blue); color: white; }
+    .current-decision { min-width: 130px; color: var(--muted); font-size: .9rem; }
+    .current-decision strong { color: var(--ink); text-transform: capitalize; }
+    .utility { max-width: 1240px; margin: 0 auto 28px; padding: 0 20px; justify-content: flex-end; }
+    .utility button { background: white; color: var(--ink); border-color: var(--line); }
+    .error { max-width: 800px; margin: 40px auto; padding: 20px; background: var(--red-soft); color: var(--red); border-radius: 12px; line-height: 1.5; }
+    .hidden { display: none !important; }
+    @media (max-width: 850px) {
+      .summary { grid-template-columns: repeat(2, 1fr); }
+      .compare { grid-template-columns: 1fr; }
+      .candidate-panel { border-left: 0; border-top: 1px solid var(--line); }
+      .decision-bar { align-items: stretch; flex-direction: column; }
+      .navigation, .decision-actions { width: 100%; }
+      .navigation button, .decision-actions button { flex: 1; }
+    }
+    @media (max-width: 560px) {
+      .review-top { flex-direction: column; }
+      .media-grid { grid-template-columns: 1fr; }
+      figure img, figure video { height: 240px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <div class="eyebrow">Local review tool · no automatic approvals</div>
+    <h1>LockIn missing-media review</h1>
+    <p class="subtitle">Compare each exercise’s exact LockIn instructions with possible RepDB or local demonstrations. Approvals are review decisions only: this page never changes <code>exercise_media.py</code>.</p>
+  </header>
+
+  <section class="toolbar" aria-label="Review progress">
+    <div class="summary">
+      <div class="stat"><span class="stat-label">Total exercises</span><strong id="total">—</strong></div>
+      <div class="stat"><span class="stat-label">Approved</span><strong id="approved">0</strong></div>
+      <div class="stat"><span class="stat-label">Declined</span><strong id="declined">0</strong></div>
+      <div class="stat"><span class="stat-label">Skipped</span><strong id="skipped">0</strong></div>
+      <div class="stat"><span class="stat-label">Unreviewed</span><strong id="unreviewed">—</strong></div>
+    </div>
+    <div class="progress-track" aria-hidden="true"><span id="progress-bar"></span></div>
+  </section>
+
+  <main>
+    <div id="loading" class="error">Loading current exercise data…</div>
+    <article id="review" class="review-shell hidden">
+      <div class="review-top">
+        <div>
+          <div id="exercise-id" class="section-label"></div>
+          <h2 id="exercise-name"></h2>
+          <div id="badges" class="badges"></div>
+        </div>
+        <div id="counter" class="counter"></div>
+      </div>
+
+      <div class="compare">
+        <section class="lockin-panel">
+          <div class="section-label">Exact LockIn instructions</div>
+          <ol id="instructions"></ol>
+        </section>
+        <section class="candidate-panel">
+          <div id="candidate-content"></div>
+        </section>
+      </div>
+
+      <div class="decision-bar">
+        <div class="navigation">
+          <button id="previous" class="nav-button" type="button">Previous</button>
+          <button id="next" class="nav-button" type="button">Next</button>
+        </div>
+        <div id="current-decision" class="current-decision">Decision: <strong>unreviewed</strong></div>
+        <div class="decision-actions" role="group" aria-label="Candidate decision">
+          <button id="approve" class="approve" type="button">Approve</button>
+          <button id="decline" class="decline" type="button">Decline</button>
+          <button id="skip" class="skip" type="button">Skip</button>
+        </div>
+      </div>
+    </article>
+  </main>
+
+  <div class="utility">
+    <button id="export" type="button">Export decisions as JSON</button>
+    <button id="clear" type="button">Clear saved decisions</button>
+  </div>
+
+  <script>
+    const storageKey = "lockin-missing-media-review-66-v1";
+    const decisions = JSON.parse(localStorage.getItem(storageKey) || "{}");
+    let records = [];
+    let index = 0;
+    let candidateIndex = 0;
+    const $ = id => document.getElementById(id);
+    const escapeHtml = value => String(value).replace(/[&<>\"]/g, character => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[character]));
+
+    function decisionKey(record, candidate) {
+      return `${record.id}:${candidate ? candidate.source_id : "no-candidate"}`;
+    }
+
+    function mediaMarkup(media, candidate) {
+      const alt = `${candidate.original_name} — ${media.label}`;
+      if (media.kind === "video") {
+        return `<figure><video controls preload="metadata" src="${escapeHtml(media.path)}" aria-label="${escapeHtml(alt)}"></video><figcaption>${escapeHtml(media.label)}</figcaption></figure>`;
+      }
+      return `<figure><img src="${escapeHtml(media.path)}" alt="${escapeHtml(alt)}"><figcaption>${escapeHtml(media.label)}</figcaption></figure>`;
+    }
+
+    function renderCandidate(record) {
+      const candidate = record.candidates[candidateIndex];
+      if (!candidate) {
+        $("candidate-content").innerHTML = `<div class="no-candidate"><div><strong>No suitable candidate found</strong><p>${escapeHtml(record.no_candidate_note)}</p></div></div>`;
+        $("approve").disabled = true;
+        $("decline").disabled = true;
+        return;
+      }
+      $("approve").disabled = false;
+      $("decline").disabled = false;
+      const mismatchRows = Object.entries(candidate.mismatches)
+        .filter(([, value]) => value)
+        .map(([label, value]) => `<div class="mismatch"><strong>${escapeHtml(label.replace("_", " "))}:</strong> ${escapeHtml(value)}</div>`)
+        .join("");
+      const candidateCount = record.candidates.length > 1
+        ? `<span class="badge">Candidate ${candidateIndex + 1} of ${record.candidates.length}</span>` : "";
+      $("candidate-content").innerHTML = `
+        <div class="candidate-heading"><div><div class="section-label">Possible candidate</div><h3>${escapeHtml(candidate.original_name)}</h3></div>${candidateCount}</div>
+        <p class="source"><strong>Original source name:</strong> ${escapeHtml(candidate.original_name)}<br><strong>Source:</strong> ${escapeHtml(candidate.source_type)} · <code>${escapeHtml(candidate.source_id)}</code></p>
+        <div class="media-grid">${candidate.media.map(media => mediaMarkup(media, candidate)).join("")}</div>
+        <div class="warning"><strong>Review carefully:</strong> ${escapeHtml(candidate.warning)}</div>
+        ${mismatchRows ? `<div class="mismatch-list">${mismatchRows}</div>` : ""}`;
+    }
+
+    function render() {
+      const record = records[index];
+      candidateIndex = Math.min(candidateIndex, Math.max(0, record.candidates.length - 1));
+      $("exercise-id").textContent = `LockIn exercise #${record.id}`;
+      $("exercise-name").textContent = record.name;
+      $("badges").innerHTML = [
+        record.difficulty,
+        `Equipment: ${record.equipment.length ? record.equipment.join(", ") : "none"}`,
+        `Position: ${record.position}`,
+      ].map(value => `<span class="badge">${escapeHtml(value)}</span>`).join("");
+      $("instructions").innerHTML = record.instructions.map(step => `<li>${escapeHtml(step)}</li>`).join("");
+      $("counter").textContent = `${index + 1} of ${records.length}`;
+      renderCandidate(record);
+      const candidate = record.candidates[candidateIndex];
+      const current = decisions[decisionKey(record, candidate)] || "unreviewed";
+      $("current-decision").innerHTML = `Decision: <strong>${escapeHtml(current)}</strong>`;
+      $("previous").disabled = index === 0;
+      $("next").disabled = index === records.length - 1;
+      updateSummary();
+    }
+
+    function updateSummary() {
+      const currentDecisions = records.map(record => {
+        const candidate = record.candidates[0];
+        return decisions[decisionKey(record, candidate)];
+      });
+      const count = value => currentDecisions.filter(decision => decision === value).length;
+      const reviewed = currentDecisions.filter(Boolean).length;
+      $("total").textContent = records.length;
+      $("approved").textContent = count("approve");
+      $("declined").textContent = count("decline");
+      $("skipped").textContent = count("skip");
+      $("unreviewed").textContent = records.length - reviewed;
+      $("progress-bar").style.width = `${records.length ? reviewed / records.length * 100 : 0}%`;
+    }
+
+    function decide(value) {
+      const record = records[index];
+      const candidate = record.candidates[candidateIndex];
+      decisions[decisionKey(record, candidate)] = value;
+      localStorage.setItem(storageKey, JSON.stringify(decisions));
+      if (index < records.length - 1) {
+        index += 1;
+        candidateIndex = 0;
+      }
+      render();
+    }
+
+    $("approve").addEventListener("click", () => decide("approve"));
+    $("decline").addEventListener("click", () => decide("decline"));
+    $("skip").addEventListener("click", () => decide("skip"));
+    $("previous").addEventListener("click", () => { if (index > 0) { index -= 1; candidateIndex = 0; render(); } });
+    $("next").addEventListener("click", () => { if (index < records.length - 1) { index += 1; candidateIndex = 0; render(); } });
+
+    $("export").addEventListener("click", () => {
+      const report = {
+        generated_at: new Date().toISOString(),
+        note: "Review decisions only. No exercise_media.py mappings were changed.",
+        decisions: records.map(record => {
+          const candidate = record.candidates[0] || null;
+          return {
+            lockin_id: record.id,
+            lockin_name: record.name,
+            candidate_original_name: candidate ? candidate.original_name : null,
+            candidate_source: candidate ? candidate.source_type : null,
+            candidate_source_id: candidate ? candidate.source_id : null,
+            decision: decisions[decisionKey(record, candidate)] || "unreviewed",
+          };
+        }),
+      };
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2)], {type: "application/json"}));
+      link.download = "lockin_media_review_66_decisions.json";
+      link.click();
+      URL.revokeObjectURL(link.href);
+    });
+
+    $("clear").addEventListener("click", () => {
+      if (!confirm("Clear every locally saved media-review decision?")) return;
+      Object.keys(decisions).forEach(key => delete decisions[key]);
+      localStorage.removeItem(storageKey);
+      render();
+    });
+
+    fetch("/api/review-data", {cache: "no-store"})
+      .then(response => {
+        if (!response.ok) throw new Error(`Server returned ${response.status}`);
+        return response.json();
+      })
+      .then(data => {
+        records = data.exercises;
+        if (!records.length) throw new Error("No missing-media exercises were returned.");
+        $("loading").classList.add("hidden");
+        $("review").classList.remove("hidden");
+        render();
+      })
+      .catch(error => {
+        $("loading").innerHTML = `<strong>Could not start the review tool.</strong><br>${escapeHtml(error.message)}<br>Start it with <code>py -3 media_review_server.py</code> instead of opening the HTML directly.`;
+      });
+  </script>
+</body>
+</html>
