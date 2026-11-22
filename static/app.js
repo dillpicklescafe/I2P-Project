@@ -314,8 +314,12 @@ function renderCurrentWorkoutStep(message = "") {
     createExerciseMedia(exercise, "active-exercise-media", "active-step-placeholder", true)
   );
   const isComplete = completedWorkoutSteps.has(step.key);
+<<<<<<< Updated upstream
   completeStepButton.textContent = isComplete ? "Mark set incomplete" : "Complete set";
   finishWorkoutButton.hidden = completedWorkoutSteps.size !== workoutSteps.length;
+=======
+  completeStepButton.textContent = isComplete ? "Mark set incomplete" : "Set completed";
+>>>>>>> Stashed changes
   activeStepMessage.textContent = message;
   renderWorkoutProgress();
 }
