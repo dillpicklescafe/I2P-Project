@@ -204,6 +204,7 @@ h1 span { color: var(--orange); }
   font-weight: 700;
   transition: background .15s ease, transform .15s ease;
 }
+.button[hidden] { display: none; }
 .button-primary { background: var(--green); color: var(--ink); }
 .button-primary:hover:not(:disabled) { transform: translateY(-1px); background: var(--mint); color: var(--ink); }
 .button-secondary { border: 1px solid var(--line); color: var(--ink); background: var(--paper); }
