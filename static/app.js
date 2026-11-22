@@ -720,7 +720,7 @@ function renderHistory(history) {
         button.disabled = false;
       }
     });
-    card.append(button);
+    
 
 
     const redoButton = makeElement("button", "history-redo", "Redo workout");
@@ -749,7 +749,9 @@ function renderHistory(history) {
       }
     });
 
-    card.append(redoButton);
+    const historyActions = makeElement("div", "history-actions");
+    historyActions.append(button, redoButton);
+    card.append(historyActions);
 
     return card;
   }));

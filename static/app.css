@@ -560,3 +560,28 @@ video.exercise-media.is-portrait { object-fit: contain; }
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+.history-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.history-redo {
+  margin-top: 0;
+  padding: 9px 16px;
+  border-radius: 8px;
+  background: #3f2548;
+  color: #ffffff;
+  border: 1px solid #7c679e;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.history-redo:hover {
+  background: #5d4269;
+}
