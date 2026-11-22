@@ -12,6 +12,7 @@ const workoutSection = document.querySelector("#workout-section");
 const exerciseList = document.querySelector("#exercise-list");
 const workoutActions = document.querySelector("#workout-actions");
 const startButton = document.querySelector("#start-button");
+const saveAndClearButton = document.querySelector("#save-and-clear-button");
 const continueWorkoutButton = document.querySelector("#continue-workout-button");
 const workoutSheet = document.querySelector("#workout-sheet");
 const workoutSheetPanel = document.querySelector("#workout-sheet-panel");
@@ -26,10 +27,15 @@ const activeStepPrescription = document.querySelector("#active-step-prescription
 const workoutStepCarousel = document.querySelector("#workout-step-carousel");
 const completeStepButton = document.querySelector("#complete-step-button");
 const finishWorkoutButton = document.querySelector("#finish-workout-button");
+const workoutCompletionOverlay = document.querySelector("#workout-completion-overlay");
+const workoutCompletionMessage = document.querySelector("#workout-completion-message");
 const activeStepMessage = document.querySelector("#active-step-message");
 const activeWorkoutMessage = document.querySelector("#active-workout-message");
 const historyList = document.querySelector("#history-list");
 const historyMessage = document.querySelector("#history-message");
+const pausedWorkoutSection = document.querySelector("#paused-workouts-section");
+const pausedWorkoutList = document.querySelector("#paused-workout-list");
+const pausedWorkoutMessage = document.querySelector("#paused-workout-message");
 const authSection = document.querySelector("#auth-section");
 const authForm = document.querySelector("#auth-form");
 const authMessage = document.querySelector("#auth-message");
@@ -85,7 +91,9 @@ function openWorkoutSheet() {
 function finishWorkoutSheetClose() {
   workoutSheet.hidden = true;
   document.body.classList.remove("workout-sheet-open");
-  document.querySelector("#workout-title").focus();
+  document.querySelector(
+    workoutSection.hidden ? "#planner-title" : "#workout-title"
+  ).focus();
 }
 
 function closeWorkoutSheet() {
@@ -314,10 +322,19 @@ function renderCurrentWorkoutStep(message = "") {
     createExerciseMedia(exercise, "active-exercise-media", "active-step-placeholder", true)
   );
   const isComplete = completedWorkoutSteps.has(step.key);
-  completeStepButton.textContent = isComplete ? "Mark set incomplete" : "Set completed";
-  finishWorkoutButton.hidden = completedWorkoutSteps.size !== workoutSteps.length;
-  activeStepMessage.textContent = message;
+  const workoutComplete = workoutSteps.length > 0
+    && completedWorkoutSteps.size === workoutSteps.length;
+  const shouldFocusFinishButton = workoutComplete && workoutCompletionOverlay.hidden;
+  completeStepButton.textContent = isComplete ? "Mark set incomplete" : "Done, next set";
+  finishWorkoutButton.hidden = !workoutComplete;
+  workoutCompletionOverlay.hidden = !workoutComplete;
+  workoutSheetPanel.classList.toggle("workout-complete", workoutComplete);
+  workoutCompletionMessage.textContent = workoutComplete
+    ? message || "All sets are complete. Progress is saved."
+    : "";
+  activeStepMessage.textContent = workoutComplete ? "" : message;
   renderWorkoutProgress();
+  if (shouldFocusFinishButton) finishWorkoutButton.focus();
 }
 
 function renderWorkoutProgress() {
@@ -482,6 +499,7 @@ function renderActiveWorkout(workout, statusMessage) {
   document.querySelector("#workout-duration").textContent = `${workout.duration} minutes`;
   workoutActions.hidden = false;
   startButton.hidden = true;
+  saveAndClearButton.hidden = false;
   continueWorkoutButton.hidden = false;
   document.querySelector("#no-results").hidden = true;
   workoutSection.hidden = false;
@@ -490,6 +508,26 @@ function renderActiveWorkout(workout, statusMessage) {
   renderExercises();
   renderCurrentWorkoutStep();
   workoutSection.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function hideGeneratedWorkout() {
+  workoutSection.hidden = true;
+  workoutActions.hidden = true;
+  startButton.hidden = true;
+  saveAndClearButton.hidden = true;
+  continueWorkoutButton.hidden = true;
+  exerciseList.replaceChildren();
+  currentWorkoutSessionId = null;
+  currentExercises = [];
+  currentDuration = 0;
+  currentRecommendationSeed = null;
+  workoutSteps = [];
+  currentWorkoutStepIndex = 0;
+  completedWorkoutSteps.clear();
+  finishWorkoutButton.hidden = true;
+  workoutCompletionOverlay.hidden = true;
+  workoutSheetPanel.classList.remove("workout-complete");
+  activeWorkoutMessage.textContent = "";
 }
 
 function renderExercise(exercise) {
@@ -607,7 +645,8 @@ finishWorkoutButton.addEventListener("click", async () => {
   }
 
   finishWorkoutButton.disabled = true;
-  activeStepMessage.textContent = "Saving completed workout...";
+  workoutCompletionMessage.textContent = "Saving workout to your history...";
+  finishWorkoutButton.textContent = "Saving...";
 
   try {
     await requestJson("/api/workouts", {
@@ -624,12 +663,8 @@ finishWorkoutButton.addEventListener("click", async () => {
     });
 
     currentWorkoutSessionId = null;
-    finishWorkoutButton.hidden = true;
-    continueWorkoutButton.hidden = true;
-    startButton.hidden = false;
-
-    activeWorkoutMessage.textContent = "Workout completed and saved to your history!";
-    activeWorkoutMessage.className = "status-message success";
+    hideGeneratedWorkout();
+    plannerMessage.textContent = "Workout completed and saved to your history.";
 
     closeWorkoutSheet();
 
@@ -639,9 +674,10 @@ await Promise.all([
 ]);
 
   } catch (error) {
-    activeStepMessage.textContent = "Could not finish workout: " + error.message;
+    workoutCompletionMessage.textContent = "Could not finish workout: " + error.message;
   } finally {
     finishWorkoutButton.disabled = false;
+    finishWorkoutButton.textContent = "Finish workout";
   }
 });
 
@@ -663,6 +699,7 @@ function renderEmptyWorkout(goal, level, duration, message) {
   workoutActions.hidden = true;
   startButton.hidden = true;
   continueWorkoutButton.hidden = true;
+  saveAndClearButton.hidden = true;
   activeWorkoutMessage.textContent = "";
   workoutSection.scrollIntoView({ behavior: "smooth", block: "start" });
 }
@@ -766,6 +803,73 @@ async function loadHistory() {
   }
 }
 
+function renderPausedWorkouts(workouts) {
+  pausedWorkoutMessage.textContent = "";
+  pausedWorkoutList.replaceChildren();
+  pausedWorkoutSection.hidden = workouts.length === 0;
+  if (workouts.length === 0) return;
+
+  pausedWorkoutList.replaceChildren(...workouts.map((workout) => {
+    const card = makeElement("article", "history-card");
+    const main = makeElement("div", "history-main");
+    const summary = makeElement("div");
+    const totalSets = workout.exercises.reduce(
+      (total, exercise) => total + exercise.sets,
+      0
+    );
+    summary.append(makeElement(
+      "p",
+      "history-date",
+      `${prettyLabel(workout.goal)} workout`
+    ));
+    summary.append(makeElement(
+      "p",
+      "history-detail",
+      `${workout.completed_set_keys.length} of ${totalSets} sets saved · ${workout.duration} min`
+    ));
+    main.append(summary, makeElement("span", "history-goal", "Unfinished"));
+    card.append(main);
+
+    const resumeButton = makeElement("button", "button button-secondary", "Resume workout");
+    resumeButton.type = "button";
+    resumeButton.addEventListener("click", async () => {
+      resumeButton.disabled = true;
+      resumeButton.textContent = "Resuming...";
+      pausedWorkoutMessage.textContent = "";
+      try {
+        const result = await requestJson(
+          `/api/paused-workouts/${encodeURIComponent(workout.session_id)}/resume`,
+          { method: "POST" }
+        );
+        showPage("build");
+        renderActiveWorkout(result.active_workout, "Unfinished workout resumed.");
+        openWorkoutSheet();
+        await loadPausedWorkouts();
+      } catch (error) {
+        pausedWorkoutMessage.textContent = error.message;
+      } finally {
+        resumeButton.disabled = false;
+        resumeButton.textContent = "Resume workout";
+      }
+    });
+
+    const actions = makeElement("div", "history-actions paused-workout-actions");
+    actions.append(resumeButton);
+    card.append(actions);
+    return card;
+  }));
+}
+
+async function loadPausedWorkouts() {
+  try {
+    const data = await requestJson("/api/paused-workouts");
+    renderPausedWorkouts(data.paused_workouts);
+  } catch (error) {
+    pausedWorkoutList.replaceChildren();
+    pausedWorkoutSection.hidden = false;
+    pausedWorkoutMessage.textContent = error.message;
+  }
+}
 
 async function loadStats(period = "week") {
   try {
@@ -983,6 +1087,7 @@ function showPage(pageName) {
   if (pageName === "tracker") {
   loadHistory();
   loadStats();
+  loadPausedWorkouts();
 }
 
 if (pageName === "library") loadLibrary();
@@ -1026,10 +1131,11 @@ async function showApp(user) {
   document.querySelector("#footer-user").firstElementChild.textContent = `Signed in as ${user.username}`;
   showPage("build");
   await Promise.all([
-  loadOptions(),
-  loadHistory(),
-  loadStats()
-]);
+    loadOptions(),
+    loadHistory(),
+    loadStats(),
+    loadPausedWorkouts(),
+  ]);
   await loadActiveWorkout();
 }
 
@@ -1094,15 +1200,23 @@ logoutButton.addEventListener("click", async () => {
     currentRecommendationSeed = null;
     workoutSteps = [];
     currentWorkoutStepIndex = 0;
+    currentWorkoutSessionId = null;
     completedWorkoutSteps.clear();
     closeWorkoutSheet();
+    finishWorkoutButton.hidden = true;
+    workoutCompletionOverlay.hidden = true;
+    workoutSheetPanel.classList.remove("workout-complete");
     workoutSection.hidden = true;
     workoutActions.hidden = true;
     startButton.hidden = true;
+    saveAndClearButton.hidden = true;
     continueWorkoutButton.hidden = true;
     exerciseList.replaceChildren();
     activeWorkoutMessage.textContent = "";
     historyList.replaceChildren(makeElement("p", "field-hint", "Log in to see your saved workouts."));
+    pausedWorkoutList.replaceChildren();
+    pausedWorkoutSection.hidden = true;
+    pausedWorkoutMessage.textContent = "";
     setAuthMode("login");
   } catch (error) {
     historyMessage.textContent = error.message;
@@ -1152,6 +1266,7 @@ document.querySelector("#planner-form").addEventListener("submit", async (event)
     document.querySelector("#workout-duration").textContent = `${duration} minutes`;
     workoutActions.hidden = false;
     startButton.hidden = false;
+    saveAndClearButton.hidden = true;
     continueWorkoutButton.hidden = true;
     document.querySelector("#no-results").hidden = true;
     workoutSection.hidden = false;
@@ -1194,5 +1309,37 @@ startButton.addEventListener("click", async () => {
 });
 
 continueWorkoutButton.addEventListener("click", openWorkoutSheet);
+
+saveAndClearButton.addEventListener("click", async () => {
+  if (!currentWorkoutSessionId) {
+    plannerMessage.textContent = "There is no active workout to save.";
+    return;
+  }
+
+  saveAndClearButton.disabled = true;
+  saveAndClearButton.textContent = "Saving...";
+  plannerMessage.textContent = "";
+  try {
+    await requestJson("/api/active-workout/pause", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session_id: currentWorkoutSessionId,
+        structure_mode: currentWorkoutStructureMode,
+        completed_set_keys: [...completedWorkoutSteps],
+        notes: currentWorkoutNotes,
+      }),
+    });
+    hideGeneratedWorkout();
+    plannerMessage.textContent = "Unfinished workout saved. Resume it from History.";
+    document.querySelector("#planner-title").focus();
+    await loadPausedWorkouts();
+  } catch (error) {
+    plannerMessage.textContent = error.message;
+  } finally {
+    saveAndClearButton.disabled = false;
+    saveAndClearButton.textContent = "Save and clear";
+  }
+});
 
 checkSession();

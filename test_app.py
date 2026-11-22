@@ -314,6 +314,98 @@ class WorkoutUiTests(unittest.TestCase):
             self.assertEqual(len(history), 1)
             self.assertEqual(history[0]["total_sets"], 1)
 
+    def test_save_and_clear_pauses_and_resumes_workout_progress(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            app = create_app({
+                "TESTING": True,
+                "SECRET_KEY": "test-secret-key",
+                "DATABASE": str(Path(temp_dir) / "paused-workout.db"),
+            })
+            client = app.test_client()
+            registration = client.post("/api/auth/register", json={
+                "username": "paused_runner",
+                "password": "test-password-123",
+                "first_name": "Paused",
+                "last_name": "Runner",
+            })
+            self.assertEqual(registration.status_code, 201)
+
+            preferences = {
+                "goal": "first_pushup",
+                "level": "beginner",
+                "equipment": [],
+                "duration": 30,
+            }
+            preview = client.post("/api/recommendations", json=preferences)
+            self.assertEqual(preview.status_code, 200)
+            start_payload = {
+                **preferences,
+                "structure_mode": "stagger",
+                "recommendation_seed": preview.get_json()["recommendation_seed"],
+            }
+            started = client.post("/api/active-workout", json=start_payload)
+            self.assertEqual(started.status_code, 201)
+            paused_candidate = started.get_json()["active_workout"]
+            self.assertEqual(
+                client.post("/api/active-workout", json=start_payload).status_code,
+                409,
+            )
+            exercise_id = paused_candidate["exercises"][0]["id"]
+            progress = {
+                "session_id": paused_candidate["session_id"],
+                "structure_mode": "stagger",
+                "completed_set_keys": [f"{exercise_id}:1"],
+                "notes": "Saved progress",
+            }
+            self.assertEqual(
+                client.put("/api/active-workout", json=progress).status_code,
+                200,
+            )
+
+            paused = client.post("/api/active-workout/pause", json=progress)
+            self.assertEqual(paused.status_code, 201)
+            self.assertEqual(
+                paused.get_json()["paused_workout"]["completed_set_keys"],
+                progress["completed_set_keys"],
+            )
+            self.assertIsNone(
+                client.get("/api/active-workout").get_json()["active_workout"]
+            )
+            self.assertEqual(
+                client.get("/api/paused-workouts").get_json()["paused_workouts"][0]["session_id"],
+                paused_candidate["session_id"],
+            )
+
+            second_started = client.post("/api/active-workout", json=start_payload)
+            self.assertEqual(second_started.status_code, 201)
+            self.assertEqual(
+                client.post(
+                    f"/api/paused-workouts/{paused_candidate['session_id']}/resume"
+                ).status_code,
+                409,
+            )
+            second_workout = second_started.get_json()["active_workout"]
+            second_pause = client.post("/api/active-workout/pause", json={
+                "session_id": second_workout["session_id"],
+                "structure_mode": second_workout["structure_mode"],
+                "completed_set_keys": [],
+                "notes": "",
+            })
+            self.assertEqual(second_pause.status_code, 201)
+
+            resumed = client.post(
+                f"/api/paused-workouts/{paused_candidate['session_id']}/resume"
+            )
+            self.assertEqual(resumed.status_code, 200)
+            self.assertEqual(
+                resumed.get_json()["active_workout"]["completed_set_keys"],
+                progress["completed_set_keys"],
+            )
+            self.assertEqual(
+                client.get("/api/paused-workouts").get_json()["paused_workouts"][0]["session_id"],
+                second_workout["session_id"],
+            )
+
     def test_existing_user_table_migrates_name_columns(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             db_path = str(Path(temp_dir) / "legacy-users.db")

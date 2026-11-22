@@ -169,6 +169,9 @@
         <button id="start-button" class="button button-primary" type="button" hidden>
           <span>Start workout</span><span aria-hidden="true">→</span>
         </button>
+        <button id="save-and-clear-button" class="button button-secondary" type="button" hidden>
+          Save and clear
+        </button>
         <button id="continue-workout-button" class="button button-primary" type="button" hidden>
           <span>Continue workout</span><span aria-hidden="true">→</span>
         </button>
@@ -258,6 +261,16 @@
           <div id="stats-chart" class="stats-chart"></div>
         </div>
       </section>
+    <section id="paused-workouts-section" class="history-section paused-workouts-section" hidden aria-labelledby="paused-workouts-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">PICK UP WHERE YOU LEFT OFF</p>
+          <h2 id="paused-workouts-title">Saved unfinished workouts</h2>
+        </div>
+      </div>
+      <div id="paused-workout-list" class="history-list"></div>
+      <p id="paused-workout-message" class="status-message" role="status" aria-live="polite"></p>
+    </section>
     <section class="history-section" aria-labelledby="history-title">
       <div class="section-heading">
         <div>
@@ -317,21 +330,20 @@
             <h2 id="active-exercise-title" class="active-exercise-title"></h2>
             <p id="active-exercise-keywords" class="exercise-keywords"></p>
             <ul id="active-step-prescription" class="active-step-prescription"></ul>
-            <button id="complete-step-button" class="button button-primary" type="button">Set completed</button>
+            <button id="complete-step-button" class="button button-primary" type="button">
+              Complete set
+            </button>
           </div>
         </div>
-<<<<<<< Updated upstream
-        <div class="active-step-controls">
-  <button id="complete-step-button" class="button button-primary" type="button">
-    Complete set
-  </button>
-
-  <button id="finish-workout-button" class="button button-primary" type="button" hidden>
-    Finish workout
-  </button>
-</div>
-=======
->>>>>>> Stashed changes
+        <div id="workout-completion-overlay" class="workout-completion-overlay" hidden>
+          <div class="workout-completion-content">
+            <h2 class="workout-completion-title">Workout complete!</h2>
+            <p id="workout-completion-message" class="workout-completion-message" role="status" aria-live="polite"></p>
+            <button id="finish-workout-button" class="button button-primary" type="button" hidden>
+              Finish workout
+            </button>
+          </div>
+        </div>
         <p id="active-step-message" class="status-message" role="status" aria-live="polite"></p>
         <div id="workout-step-carousel" class="workout-step-carousel" role="group" aria-label="Workout sets"></div>
       </div>

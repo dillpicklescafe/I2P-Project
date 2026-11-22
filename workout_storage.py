@@ -65,6 +65,19 @@ def initialize_database(db_path=DATABASE_NAME):
                 )
             """)
 
+            connection.execute("""
+                CREATE TABLE IF NOT EXISTS paused_workouts (
+                    user_id INTEGER NOT NULL,
+                    session_id TEXT NOT NULL,
+                    workout_json TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY (user_id, session_id),
+                    FOREIGN KEY (user_id)
+                        REFERENCES users(id)
+                        ON DELETE CASCADE
+                )
+            """)
+
             workout_columns = connection.execute(
                 "PRAGMA table_info(workouts)"
             ).fetchall()
@@ -160,6 +173,132 @@ def get_active_workout(user_id, db_path=DATABASE_NAME):
         return json.loads(row["workout_json"])
     except json.JSONDecodeError as error:
         raise sqlite3.DatabaseError("Stored active workout is invalid.") from error
+
+
+def pause_active_workout(user_id, session_id, db_path=DATABASE_NAME):
+    """Move one account's active workout into its saved paused workouts."""
+    from datetime import datetime, timezone
+
+    if not isinstance(user_id, int) or isinstance(user_id, bool) or user_id <= 0:
+        raise ValueError("User ID must be a positive integer.")
+    if not isinstance(session_id, str) or not session_id or len(session_id) > 128:
+        raise ValueError("Workout session ID is invalid.")
+
+    initialize_database(db_path)
+    with closing(sqlite3.connect(db_path)) as connection:
+        connection.row_factory = sqlite3.Row
+        with connection:
+            connection.execute("PRAGMA foreign_keys = ON")
+            row = connection.execute("""
+                SELECT workout_json
+                FROM active_workouts
+                WHERE user_id = ? AND session_id = ?
+            """, (user_id, session_id)).fetchone()
+            if row is None:
+                return None
+            try:
+                workout = json.loads(row["workout_json"])
+            except json.JSONDecodeError as error:
+                raise sqlite3.DatabaseError(
+                    "Stored active workout is invalid."
+                ) from error
+
+            updated_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+            connection.execute("""
+                INSERT INTO paused_workouts (
+                    user_id, session_id, workout_json, updated_at
+                )
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(user_id, session_id) DO UPDATE SET
+                    workout_json = excluded.workout_json,
+                    updated_at = excluded.updated_at
+            """, (user_id, session_id, row["workout_json"], updated_at))
+            deleted = connection.execute("""
+                DELETE FROM active_workouts
+                WHERE user_id = ? AND session_id = ?
+            """, (user_id, session_id))
+            if deleted.rowcount != 1:
+                raise sqlite3.DatabaseError(
+                    "Active workout changed while it was being saved."
+                )
+    return workout
+
+
+def get_paused_workouts(user_id, db_path=DATABASE_NAME):
+    """Retrieve saved paused workouts for one account, newest first."""
+    if not isinstance(user_id, int) or isinstance(user_id, bool) or user_id <= 0:
+        raise ValueError("User ID must be a positive integer.")
+
+    initialize_database(db_path)
+    with closing(sqlite3.connect(db_path)) as connection:
+        connection.row_factory = sqlite3.Row
+        rows = connection.execute("""
+            SELECT workout_json
+            FROM paused_workouts
+            WHERE user_id = ?
+            ORDER BY updated_at DESC
+        """, (user_id,)).fetchall()
+
+    try:
+        return [json.loads(row["workout_json"]) for row in rows]
+    except json.JSONDecodeError as error:
+        raise sqlite3.DatabaseError("Stored paused workout is invalid.") from error
+
+
+def resume_paused_workout(user_id, session_id, db_path=DATABASE_NAME):
+    """Move a paused workout back into the account's active slot."""
+    from datetime import datetime, timezone
+
+    if not isinstance(user_id, int) or isinstance(user_id, bool) or user_id <= 0:
+        raise ValueError("User ID must be a positive integer.")
+    if not isinstance(session_id, str) or not session_id or len(session_id) > 128:
+        raise ValueError("Workout session ID is invalid.")
+
+    initialize_database(db_path)
+    with closing(sqlite3.connect(db_path)) as connection:
+        connection.row_factory = sqlite3.Row
+        with connection:
+            connection.execute("PRAGMA foreign_keys = ON")
+            active = connection.execute("""
+                SELECT 1
+                FROM active_workouts
+                WHERE user_id = ?
+            """, (user_id,)).fetchone()
+            if active is not None:
+                raise ValueError(
+                    "Save and clear your current workout before resuming another."
+                )
+
+            row = connection.execute("""
+                SELECT workout_json
+                FROM paused_workouts
+                WHERE user_id = ? AND session_id = ?
+            """, (user_id, session_id)).fetchone()
+            if row is None:
+                return None
+            try:
+                workout = json.loads(row["workout_json"])
+            except json.JSONDecodeError as error:
+                raise sqlite3.DatabaseError(
+                    "Stored paused workout is invalid."
+                ) from error
+
+            connection.execute("""
+                INSERT INTO active_workouts (
+                    user_id, session_id, workout_json, updated_at
+                )
+                VALUES (?, ?, ?, ?)
+            """, (
+                user_id,
+                session_id,
+                row["workout_json"],
+                datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            ))
+            connection.execute("""
+                DELETE FROM paused_workouts
+                WHERE user_id = ? AND session_id = ?
+            """, (user_id, session_id))
+    return workout
 
 
 def create_user(

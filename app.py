@@ -32,10 +32,13 @@ from workout_storage import (
     get_user_by_id,
     get_user_by_username,
     get_active_workout,
+    get_paused_workouts,
     get_workout_by_id,
     get_workout_history,
     get_workout_stats,
     initialize_database,
+    pause_active_workout,
+    resume_paused_workout,
     save_active_workout,
     save_workout,
 )
@@ -619,11 +622,80 @@ def create_app(test_config=None):
         except sqlite3.Error:
             return database_error()
 
+    @app.get("/api/paused-workouts")
+    @authenticated_api
+    def paused_workouts():
+        try:
+            return jsonify(
+                paused_workouts=get_paused_workouts(
+                    session["user_id"],
+                    app.config["DATABASE"],
+                )
+            )
+        except sqlite3.Error:
+            return database_error()
+
+    @app.post("/api/active-workout/pause")
+    @authenticated_api
+    def pause_user_workout():
+        try:
+            data = json_body()
+            workout = get_active_workout(
+                session["user_id"],
+                app.config["DATABASE"],
+            )
+            if workout is None:
+                return jsonify(error="There is no active workout to save."), 404
+            updated_workout = update_active_workout_progress(workout, data)
+            save_active_workout(
+                session["user_id"],
+                updated_workout,
+                app.config["DATABASE"],
+            )
+            paused_workout = pause_active_workout(
+                session["user_id"],
+                updated_workout["session_id"],
+                app.config["DATABASE"],
+            )
+            if paused_workout is None:
+                return jsonify(
+                    error="The active workout changed. Reload the page and try again."
+                ), 409
+            return jsonify(paused_workout=paused_workout), 201
+        except (ValueError, TypeError) as error:
+            return jsonify(error=str(error)), 400
+        except sqlite3.Error:
+            return database_error()
+
+    @app.post("/api/paused-workouts/<session_id>/resume")
+    @authenticated_api
+    def resume_user_workout(session_id):
+        try:
+            workout = resume_paused_workout(
+                session["user_id"],
+                session_id,
+                app.config["DATABASE"],
+            )
+            if workout is None:
+                return jsonify(error="Saved unfinished workout was not found."), 404
+            return jsonify(active_workout=workout)
+        except ValueError as error:
+            return jsonify(error=str(error)), 409
+        except sqlite3.Error:
+            return database_error()
+
     @app.post("/api/active-workout")
     @authenticated_api
     def start_user_workout():
         try:
             data = json_body()
+            if get_active_workout(
+                session["user_id"],
+                app.config["DATABASE"],
+            ) is not None:
+                return jsonify(
+                    error="Save and clear your current workout before starting another."
+                ), 409
             workout = build_active_workout(
                 data,
                 app.config["DATABASE"],
