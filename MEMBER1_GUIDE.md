@@ -106,11 +106,30 @@ matches = filter_exercises(
 ## Duration meaning
 
 `duration` is a conservative whole-minute estimate for the complete exercise,
-not a measured timer. It includes the listed sets or holds plus approximate
-time for repetitions, short rests, and changing position. Actual time varies
-with pace, rest needs, and whether repetitions are performed on both sides.
-The recommendation system only guarantees that the sum of these estimates does
-not exceed the requested duration.
+not a measured timer. For repetitions, it uses an estimated movement cadence
+appropriate to the exercise type; for holds and intervals, it uses their
+prescribed seconds. It adds rest between sets (using the exercise's rest value
+or a type- and difficulty-based default) and a short setup/position-change
+allowance for each exercise. Actual time varies with pace, rest needs, and
+whether repetitions are performed on both sides.
+
+The planning defaults are 4 seconds per controlled strength, stability,
+balance, mobility, or coordination repetition; 3 seconds per cardio repetition;
+and 2 seconds per plyometric repetition. Default rests are 60/90/120 seconds
+for beginner/intermediate/advanced strength, 45 seconds for stability and
+balance, 15 seconds for mobility and flexibility, 30 seconds for cardio and
+coordination, and 90 seconds for plyometrics. The estimate includes a
+30-second setup/position change per exercise. These are planning assumptions,
+not measured exercise timings; an exercise's explicit rest value takes
+precedence.
+
+The recommendation system keeps the selected exercises when their calculated
+time fits, then adds repetitions and sets in small steps to use the requested
+time. Repetition ranges are 10–12 for beginners, 12–16 for intermediate, and
+15–20 for advanced; each exercise is limited to six sets. If the selected
+goal, difficulty, and equipment do not provide enough exercise variety to fill
+the available time within those limits, the estimate will be shorter rather
+than exceeding them.
 
 For timed cardio, `calculate_interval_seconds(exercise)` returns work time plus
 between-set rest. That interval total is validated to fit within the exercise's

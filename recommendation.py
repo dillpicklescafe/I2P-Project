@@ -1,11 +1,38 @@
 import random
 from itertools import combinations
+from math import ceil
 from exercises import exercises
 
 
 VALID_LEVELS = ["beginner", "intermediate", "advanced"]
 MIN_EXERCISES_FOR_LEVEL = 1
 MIN_EXERCISES_PER_WORKOUT = 3
+TRANSITION_SECONDS = 30
+MAX_SETS_PER_EXERCISE = 6
+REP_SECONDS_BY_TYPE = {
+    "strength": 4,
+    "stability": 4,
+    "balance": 4,
+    "mobility": 4,
+    "coordination": 4,
+    "cardio": 3,
+    "plyometric": 2,
+}
+REST_SECONDS_BY_TYPE = {
+    "strength": {"beginner": 60, "intermediate": 90, "advanced": 120},
+    "stability": 45,
+    "balance": 45,
+    "mobility": 15,
+    "flexibility": 15,
+    "coordination": 30,
+    "cardio": 30,
+    "plyometric": 90,
+}
+REP_RANGES_BY_LEVEL = {
+    "beginner": (10, 12),
+    "intermediate": (12, 16),
+    "advanced": (15, 20),
+}
 SUPPORTED_EQUIPMENT = [
     "bar", "bench", "chair", "dumbbells", "resistance_band", "step", "wall"
 ]
@@ -61,6 +88,115 @@ def get_available_equipment():
     return SUPPORTED_EQUIPMENT.copy()
 
 
+def _rest_seconds(exercise):
+    rest_seconds = exercise.get("rest_seconds")
+    if rest_seconds is not None:
+        return rest_seconds
+
+    exercise_type = exercise["type"]
+    if exercise_type == "strength":
+        return REST_SECONDS_BY_TYPE[exercise_type][exercise["level"]]
+    return REST_SECONDS_BY_TYPE.get(exercise_type, 30)
+
+
+def _exercise_duration_seconds(exercise):
+    """Estimate elapsed exercise time from its prescription and recovery."""
+    sets = exercise["sets"]
+    rest_seconds = _rest_seconds(exercise)
+
+    if exercise["reps"] is not None:
+        active_seconds = (
+            sets
+            * exercise["reps"]
+            * REP_SECONDS_BY_TYPE.get(exercise["type"], 4)
+        )
+    elif exercise["hold_seconds"] is not None:
+        active_seconds = sets * exercise["hold_seconds"]
+    elif exercise["work_seconds"] is not None:
+        active_seconds = sets * exercise["work_seconds"]
+    else:
+        active_seconds = sets * exercise["duration"] * 60
+
+    between_set_rest = max(0, sets - 1) * rest_seconds
+    return active_seconds + between_set_rest + TRANSITION_SECONDS
+
+
+def _update_exercise_duration(exercise):
+    exercise["duration"] = max(1, ceil(_exercise_duration_seconds(exercise) / 60))
+
+
+def _prepare_exercise(exercise):
+    """Copy an exercise and expose timed continuous cardio as a work interval."""
+    prepared = exercise.copy()
+    if prepared["reps"] is not None:
+        min_reps, max_reps = REP_RANGES_BY_LEVEL[prepared["level"]]
+        prepared["reps"] = min(max(prepared["reps"], min_reps), max_reps)
+    if (
+        prepared["type"] == "cardio"
+        and prepared["reps"] is None
+        and prepared["hold_seconds"] is None
+        and prepared["work_seconds"] is None
+    ):
+        prepared["work_seconds"] = prepared["duration"] * 60
+    if prepared["sets"] > 1 and prepared["rest_seconds"] is None:
+        prepared["rest_seconds"] = _rest_seconds(prepared)
+    _update_exercise_duration(prepared)
+    return prepared
+
+
+def _scale_exercise_volume(workout, duration):
+    """Increase reps and sets in small steps without exceeding exercise limits."""
+    duration_seconds = duration * 60
+    total_seconds = sum(item["duration"] * 60 for item in workout)
+    tolerance_seconds = max(2 * 60, round(duration_seconds * 0.05))
+    if duration_seconds - total_seconds <= tolerance_seconds:
+        return
+
+    while True:
+        changes = []
+        for index, exercise in enumerate(workout):
+            max_reps = REP_RANGES_BY_LEVEL[exercise["level"]][1]
+            if exercise["reps"] is not None:
+                next_reps = min(max_reps, exercise["reps"] + 2)
+                if next_reps > exercise["reps"]:
+                    candidate = exercise.copy()
+                    candidate["reps"] = next_reps
+                    candidate_seconds = ceil(_exercise_duration_seconds(candidate) / 60) * 60
+                    changes.append((index, "reps", next_reps, candidate_seconds))
+
+            if exercise["sets"] < MAX_SETS_PER_EXERCISE:
+                candidate = exercise.copy()
+                candidate["sets"] += 1
+                if candidate["rest_seconds"] is None:
+                    candidate["rest_seconds"] = _rest_seconds(candidate)
+                candidate_seconds = ceil(_exercise_duration_seconds(candidate) / 60) * 60
+                changes.append((index, "sets", candidate["sets"], candidate_seconds))
+
+        fitting_changes = [
+            change for change in changes
+            if total_seconds - workout[change[0]]["duration"] * 60
+            + change[3] <= duration_seconds
+        ]
+        if not fitting_changes:
+            return
+
+        index, field, value, candidate_seconds = max(
+            fitting_changes,
+            key=lambda change: (
+                total_seconds
+                - workout[change[0]]["duration"] * 60
+                + change[3],
+                change[1] == "sets",
+                -change[0],
+            ),
+        )
+        workout[index][field] = value
+        if workout[index]["sets"] > 1 and workout[index]["rest_seconds"] is None:
+            workout[index]["rest_seconds"] = _rest_seconds(workout[index])
+        _update_exercise_duration(workout[index])
+        total_seconds = sum(item["duration"] * 60 for item in workout)
+
+
 def filter_exercises(goal, level, available_equipment):
     """Return matching exercises without changing the database."""
     if not isinstance(goal, str) or goal not in get_available_goals():
@@ -114,9 +250,6 @@ def recommend_workout(goal, level, available_equipment, duration, shuffle=True,
     if not isinstance(shuffle, bool):
         return []
 
-    workout = []
-    total_duration = 0
-    used_body_areas = []
     candidates = filter_exercises(goal, level, available_equipment)
 
     if shuffle:
@@ -125,6 +258,7 @@ def recommend_workout(goal, level, available_equipment, duration, shuffle=True,
 
     varied_candidates = []
     repeated_candidates = []
+    used_body_areas = []
 
     for exercise in candidates:
         main_body_area = exercise["body_area"][0]
@@ -143,6 +277,7 @@ def recommend_workout(goal, level, available_equipment, duration, shuffle=True,
             exercise for exercise in candidates
             if not exercise["equipment"]
         ]
+
     def has_progression_conflict(first, second):
         first_variations = [first["easier_variation"], first["harder_variation"]]
         second_variations = [second["easier_variation"], second["harder_variation"]]
@@ -151,49 +286,65 @@ def recommend_workout(goal, level, available_equipment, duration, shuffle=True,
             or second["name"] in first_variations
         )
 
-    # Reserve room for a complementary three-exercise foundation before
-    # greedily adding optional work. This prevents a long first exercise from
-    # crowding a valid short plan out of a 15-minute budget.
-    valid_foundations = []
-    for foundation in combinations(candidates, MIN_EXERCISES_PER_WORKOUT):
-        if sum(exercise["duration"] for exercise in foundation) > duration:
-            continue
-        if any(
-            has_progression_conflict(first, second)
-            for first, second in combinations(foundation, 2)
+    def select_exercises(available_candidates):
+        workout = []
+        total_duration = 0
+        # Reserve a varied three-exercise foundation before adding optional work.
+        valid_foundations = []
+        for foundation in combinations(
+            available_candidates, MIN_EXERCISES_PER_WORKOUT
         ):
-            continue
-        equipped_count = sum(bool(exercise["equipment"]) for exercise in foundation)
-        body_area_count = len({
-            exercise["body_area"][0] for exercise in foundation
-        })
-        valid_foundations.append((equipped_count, body_area_count, foundation))
+            if sum(exercise["duration"] for exercise in foundation) > duration:
+                continue
+            if any(
+                has_progression_conflict(first, second)
+                for first, second in combinations(foundation, 2)
+            ):
+                continue
+            equipped_count = sum(
+                bool(exercise["equipment"]) for exercise in foundation
+            )
+            body_area_count = len({
+                exercise["body_area"][0] for exercise in foundation
+            })
+            valid_foundations.append(
+                (equipped_count, body_area_count, foundation)
+            )
 
-    if valid_foundations:
-        _, _, foundation = max(
-            valid_foundations,
-            key=lambda item: (item[0], item[1]),
-        )
-        workout.extend(foundation)
-        total_duration = sum(exercise["duration"] for exercise in workout)
+        if valid_foundations:
+            _, _, foundation = max(
+                valid_foundations,
+                key=lambda item: (item[0], item[1]),
+            )
+            workout.extend(foundation)
+            total_duration = sum(exercise["duration"] for exercise in workout)
 
-    selected_ids = {exercise["id"] for exercise in workout}
+        selected_ids = {exercise["id"] for exercise in workout}
+        for exercise in available_candidates:
+            if exercise["id"] in selected_ids:
+                continue
+            if any(
+                has_progression_conflict(exercise, selected_exercise)
+                for selected_exercise in workout
+            ):
+                continue
+            if total_duration + exercise["duration"] <= duration:
+                workout.append(exercise)
+                selected_ids.add(exercise["id"])
+                total_duration += exercise["duration"]
+        return workout
 
-    for exercise in candidates:
-        if exercise["id"] in selected_ids:
-            continue
+    workout = select_exercises(candidates)
+    workout = [_prepare_exercise(exercise) for exercise in workout]
+    if sum(exercise["duration"] for exercise in workout) > duration:
+        prepared_candidates = [
+            _prepare_exercise(exercise) for exercise in candidates
+        ]
+        workout = select_exercises(prepared_candidates)
 
-        if any(
-            has_progression_conflict(exercise, selected_exercise)
-            for selected_exercise in workout
-        ):
-            continue
-
-        if total_duration + exercise["duration"] <= duration:
-            workout.append(exercise)
-            selected_ids.add(exercise["id"])
-            total_duration += exercise["duration"]
-
+    _scale_exercise_volume(workout, duration)
+    for exercise in workout:
+        _update_exercise_duration(exercise)
     return workout
 
 

@@ -16,6 +16,7 @@ const newWorkoutConfirmMessage = document.querySelector("#new-workout-confirm-me
 const confirmNewWorkoutButton = document.querySelector("#confirm-new-workout-button");
 const cancelNewWorkoutButton = document.querySelector("#cancel-new-workout-button");
 const workoutSection = document.querySelector("#workout-section");
+const workoutTimeEstimate = document.querySelector("#workout-time-estimate");
 const exerciseList = document.querySelector("#exercise-list");
 const workoutActions = document.querySelector("#workout-actions");
 const startButton = document.querySelector("#start-button");
@@ -375,7 +376,7 @@ function createExerciseMedia(
   return makeElement("div", placeholderClass, "Demo coming soon");
 }
 
-function populateExercisePreview(container, exercise, titleId) {
+function populateExercisePreview(container, exercise, titleId, instructionsFirst = false) {
   const preview = makeElement("article", "exercise-preview");
   const mediaFrame = makeElement("div", "exercise-preview-visual");
   mediaFrame.append(createExerciseMedia(
@@ -393,6 +394,22 @@ function populateExercisePreview(container, exercise, titleId) {
   title.id = titleId;
   heading.append(title);
   details.append(heading);
+
+  let instructionSection = null;
+  if (Array.isArray(exercise.instructions) && exercise.instructions.length) {
+    instructionSection = makeElement("section", "exercise-preview-instructions");
+    instructionSection.append(makeElement(
+      "h3",
+      "",
+      instructionsFirst ? "Step-by-step instructions" : "How to Perform"
+    ));
+    const steps = makeElement("ol");
+    exercise.instructions.forEach((instruction) => {
+      steps.append(makeElement("li", "", instruction));
+    });
+    instructionSection.append(steps);
+    if (instructionsFirst) details.append(instructionSection);
+  }
 
   const stats = makeElement("dl", "exercise-preview-stats");
   const facts = makeElement("dl", "exercise-preview-facts");
@@ -446,16 +463,7 @@ function populateExercisePreview(container, exercise, titleId) {
   }
   if (facts.children.length) details.append(facts);
 
-  if (Array.isArray(exercise.instructions) && exercise.instructions.length) {
-    const instructions = makeElement("section", "exercise-preview-instructions");
-    instructions.append(makeElement("h3", "", "How to Perform"));
-    const steps = makeElement("ol");
-    exercise.instructions.forEach((instruction) => {
-      steps.append(makeElement("li", "", instruction));
-    });
-    instructions.append(steps);
-    details.append(instructions);
-  }
+  if (instructionSection && !instructionsFirst) details.append(instructionSection);
 
   preview.append(details);
   container.replaceChildren(preview);
@@ -537,7 +545,8 @@ function openExercisePreviewDialog(trigger, exercise) {
   populateExercisePreview(
     exercisePreviewDialogContent,
     exercise,
-    "exercise-preview-dialog-title"
+    "exercise-preview-dialog-title",
+    true
   );
   exercisePreviewDialog.showModal();
 }
@@ -800,6 +809,7 @@ function renderActiveWorkout(workout) {
   document.querySelector("#workout-focus").textContent = prettyLabel(workout.goal);
   document.querySelector("#workout-level").textContent = prettyLabel(workout.level);
   document.querySelector("#workout-duration").textContent = `${workout.duration} minutes`;
+  renderWorkoutTimeEstimate(workout.exercises, workout.duration);
   workoutActions.hidden = false;
   startButton.hidden = true;
   saveAndClearButton.hidden = false;
@@ -833,6 +843,22 @@ function hideGeneratedWorkout() {
   workoutCompletionOverlay.hidden = true;
   workoutSheetPanel.classList.remove("workout-complete");
   activeWorkoutMessage.textContent = "";
+  workoutTimeEstimate.textContent = "";
+}
+
+function renderWorkoutTimeEstimate(exercises, availableMinutes) {
+  const estimatedMinutes = exercises.reduce(
+    (total, exercise) => total + exercise.duration,
+    0
+  );
+  workoutTimeEstimate.textContent =
+    `Estimated workout: ${estimatedMinutes} min (${availableMinutes} min available), ` +
+    "including prescribed work, rest, and exercise transitions.";
+  const toleranceMinutes = Math.max(2, Math.round(availableMinutes * 0.05));
+  if (estimatedMinutes + toleranceMinutes < availableMinutes) {
+    workoutTimeEstimate.textContent +=
+      " Your selected goal and equipment don't provide enough varied exercises to use all the time within the planner's volume limits.";
+  }
 }
 
 async function pauseWorkout(workout) {
@@ -1029,6 +1055,7 @@ function renderEmptyWorkout(goal, level, duration, message) {
   currentGoal = goal;
   currentExercises = [];
   currentDuration = duration;
+  workoutTimeEstimate.textContent = "";
   workoutSteps = [];
   currentWorkoutStepIndex = 0;
   completedWorkoutSteps.clear();
@@ -1657,6 +1684,7 @@ plannerForm.addEventListener("submit", async (event) => {
     currentExercises = data.exercises;
     currentDuration = duration;
     currentRecommendationSeed = data.recommendation_seed;
+    renderWorkoutTimeEstimate(data.exercises, duration);
     workoutSteps = [];
     currentWorkoutStepIndex = 0;
     completedWorkoutSteps.clear();

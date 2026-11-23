@@ -7,7 +7,10 @@ from recommendation import filter_exercises
 from recommendation import get_available_equipment
 from recommendation import get_available_goals
 from recommendation import get_available_levels
+from recommendation import MAX_SETS_PER_EXERCISE
 from recommendation import recommend_workout
+from recommendation import REP_RANGES_BY_LEVEL
+from recommendation import _prepare_exercise
 
 
 REQUIRED_FIELDS = [
@@ -173,6 +176,108 @@ class RecommendationTests(unittest.TestCase):
         for exercise in workout:
             names.append(exercise["name"])
         self.assertEqual(len(names), len(set(names)))
+
+    def test_duration_scales_prescriptions_to_use_available_time(self):
+        equipment = get_available_equipment()
+        short_workout = recommend_workout(
+            "upper_body_strength",
+            "beginner",
+            equipment,
+            15,
+            random_seed=2,
+        )
+        medium_workout = recommend_workout(
+            "upper_body_strength",
+            "beginner",
+            equipment,
+            30,
+            random_seed=2,
+        )
+        long_workout = recommend_workout(
+            "upper_body_strength",
+            "beginner",
+            equipment,
+            120,
+            random_seed=2,
+        )
+
+        self.assertGreater(
+            calculate_workout_duration(long_workout),
+            calculate_workout_duration(short_workout),
+        )
+        self.assertEqual(calculate_workout_duration(long_workout), 120)
+        self.assertGreater(
+            sum(exercise["sets"] for exercise in medium_workout),
+            sum(exercise["sets"] for exercise in short_workout),
+        )
+        self.assertGreater(
+            sum(exercise["sets"] for exercise in long_workout),
+            sum(exercise["sets"] for exercise in medium_workout),
+        )
+        self.assertTrue(any(
+            exercise["sets"] > next(
+                source["sets"] for source in exercises
+                if source["id"] == exercise["id"]
+            )
+            for exercise in long_workout
+        ))
+        self.assertTrue(any(
+            exercise["reps"] > next(
+                source["reps"] for source in exercises
+                if source["id"] == exercise["id"]
+            )
+            for exercise in long_workout
+            if exercise["reps"] is not None
+        ))
+        self.assertTrue(all(exercise["rest_seconds"] > 0 for exercise in long_workout))
+        self.assertTrue(all(
+            exercise["sets"] <= MAX_SETS_PER_EXERCISE
+            for exercise in long_workout
+        ))
+        min_reps, max_reps = REP_RANGES_BY_LEVEL["beginner"]
+        self.assertTrue(all(
+            min_reps <= exercise["reps"] <= max_reps
+            for exercise in long_workout
+            if exercise["reps"] is not None
+        ))
+
+    def test_repetition_ranges_follow_selected_difficulty(self):
+        for level, (min_reps, max_reps) in REP_RANGES_BY_LEVEL.items():
+            workout = recommend_workout(
+                "upper_body_strength",
+                level,
+                get_available_equipment(),
+                60,
+                random_seed=2,
+            )
+            self.assertTrue(workout)
+            self.assertTrue(all(
+                min_reps <= exercise["reps"] <= max_reps
+                for exercise in workout
+                if exercise["reps"] is not None
+            ))
+            self.assertTrue(all(
+                exercise["sets"] <= MAX_SETS_PER_EXERCISE
+                for exercise in workout
+            ))
+
+    def test_strength_duration_uses_reps_rest_and_transition_time(self):
+        exercise = {
+            "type": "strength",
+            "level": "beginner",
+            "sets": 2,
+            "reps": 10,
+            "hold_seconds": None,
+            "work_seconds": None,
+            "rest_seconds": None,
+            "duration": 99,
+        }
+
+        prepared = _prepare_exercise(exercise)
+
+        self.assertEqual(prepared["duration"], 3)
+        self.assertEqual(exercise["duration"], 99)
+        self.assertEqual(prepared["rest_seconds"], 60)
 
     def test_invalid_inputs_do_not_crash(self):
         self.assertEqual(recommend_workout("not_a_goal", "beginner", [], 10), [])

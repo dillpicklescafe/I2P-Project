@@ -277,9 +277,27 @@ class WorkoutUiTests(unittest.TestCase):
             self.assertEqual(started.status_code, 201)
             active_workout = started.get_json()["active_workout"]
             self.assertEqual(
-                [exercise["id"] for exercise in active_workout["exercises"]],
-                [exercise["id"] for exercise in preview_data["exercises"]],
+                [
+                    (exercise["id"], exercise["sets"], exercise["reps"])
+                    for exercise in active_workout["exercises"]
+                ],
+                [
+                    (exercise["id"], exercise["sets"], exercise["reps"])
+                    for exercise in preview_data["exercises"]
+                ],
             )
+            self.assertLessEqual(
+                sum(exercise["duration"] for exercise in active_workout["exercises"]),
+                preferences["duration"],
+            )
+            self.assertTrue(all(
+                exercise["sets"] <= 6
+                and (
+                    exercise["reps"] is None
+                    or 10 <= exercise["reps"] <= 12
+                )
+                for exercise in active_workout["exercises"]
+            ))
             self.assertEqual(active_workout["structure_mode"], "stagger")
             exercise_id = active_workout["exercises"][0]["id"]
             progress = {
