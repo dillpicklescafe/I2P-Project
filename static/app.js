@@ -10,6 +10,8 @@ const equipmentOptions = document.querySelector("#equipment-options");
 const recommendButton = document.querySelector("#recommend-button");
 const plannerMessage = document.querySelector("#planner-message");
 const newWorkoutConfirmDialog = document.querySelector("#new-workout-confirm-dialog");
+const newWorkoutConfirmTitle = document.querySelector("#new-workout-confirm-title");
+const newWorkoutConfirmDescription = document.querySelector("#new-workout-confirm-description");
 const newWorkoutConfirmMessage = document.querySelector("#new-workout-confirm-message");
 const confirmNewWorkoutButton = document.querySelector("#confirm-new-workout-button");
 const cancelNewWorkoutButton = document.querySelector("#cancel-new-workout-button");
@@ -83,6 +85,9 @@ let currentWorkoutStructureMode = "block";
 let currentWorkoutNotes = "";
 let pendingNewWorkoutAction = null;
 let pendingWorkoutToPause = null;
+let skipWorkoutConflictCheck = false;
+let workoutCloseInProgress = false;
+let workoutProgressSaving = false;
 let libraryExercises = [];
 let libraryLoaded = false;
 let libraryLoading = false;
@@ -108,7 +113,32 @@ function finishWorkoutSheetClose() {
   ).focus();
 }
 
-function closeWorkoutSheet() {
+async function closeWorkoutSheet() {
+  if (workoutCloseInProgress) return;
+  if (currentWorkoutSessionId) {
+    if (workoutProgressSaving) {
+      activeStepMessage.textContent = "Please wait for this set to save before exiting.";
+      return;
+    }
+    workoutCloseInProgress = true;
+    closeWorkoutSheetButton.disabled = true;
+    try {
+      await pauseWorkout({
+        session_id: currentWorkoutSessionId,
+        structure_mode: currentWorkoutStructureMode,
+        completed_set_keys: [...completedWorkoutSteps],
+        notes: currentWorkoutNotes,
+      });
+      hideGeneratedWorkout();
+      await loadPausedWorkouts();
+    } catch (error) {
+      activeStepMessage.textContent = `Could not save workout progress: ${error.message}`;
+      return;
+    } finally {
+      workoutCloseInProgress = false;
+      closeWorkoutSheetButton.disabled = false;
+    }
+  }
   if (!workoutSheet.classList.contains("is-open")) {
     finishWorkoutSheetClose();
     return;
@@ -268,7 +298,8 @@ function isValidStoredExercise(exercise) {
     && exercise.equipment.every((item) => typeof item === "string")
     && (exercise.media_url === null
       || (typeof exercise.media_url === "string" && exercise.media_url.startsWith("/static/")))
-    && (exercise.media_type === null || ["gif", "mp4", "jpg", "png"].includes(exercise.media_type));
+    && (exercise.media_type === null
+      || ["gif", "mp4", "jpg", "jpeg", "png", "webp"].includes(exercise.media_type));
 }
 
 function isValidStoredWorkout(workout, availableGoals) {
@@ -822,9 +853,24 @@ async function pauseWorkout(workout) {
   });
 }
 
-function promptToReplaceWorkout(action, workout) {
-  pendingNewWorkoutAction = action;
+function promptToReplaceWorkout(action, workout, sessionId = null) {
+  pendingNewWorkoutAction = { action, sessionId };
   pendingWorkoutToPause = workout;
+  const hasActiveWorkout = Boolean(workout);
+  const actionLabels = {
+    create: ["Start a new workout?", "create new"],
+    start: ["Start a new workout?", "create new"],
+    redo: ["Redo this workout?", "redo workout"],
+    resume: ["Resume another workout?", "resume workout"],
+  };
+  const [title, buttonLabel] = actionLabels[action];
+  newWorkoutConfirmTitle.textContent = title;
+  newWorkoutConfirmDescription.textContent = hasActiveWorkout
+    ? "Your current workout and completed sets will be saved in History so you can resume it later."
+    : "Your unfinished workouts are already saved in History and will remain available.";
+  confirmNewWorkoutButton.textContent = hasActiveWorkout
+    ? `Yes, save and ${buttonLabel}`
+    : `Yes, ${buttonLabel}`;
   newWorkoutConfirmMessage.textContent = "";
   newWorkoutConfirmDialog.showModal();
 }
@@ -883,6 +929,7 @@ function renderExercises() {
 
 
 completeStepButton.addEventListener("click", async () => {
+  if (workoutCloseInProgress) return;
   const step = workoutSteps[currentWorkoutStepIndex];
   if (!step) return;
 
@@ -905,6 +952,7 @@ completeStepButton.addEventListener("click", async () => {
   }
 
   completeStepButton.disabled = true;
+  workoutProgressSaving = true;
   activeStepMessage.textContent = "Saving progress...";
 
   try {
@@ -930,6 +978,7 @@ completeStepButton.addEventListener("click", async () => {
 
     renderCurrentWorkoutStep("Could not save progress: " + error.message);
   } finally {
+    workoutProgressSaving = false;
     completeStepButton.disabled = false;
   }
 });
@@ -1064,14 +1113,15 @@ function renderHistory(history) {
       redoButton.textContent = "Preparing workout...";
 
       try {
-        const result = await requestJson(
-          `/api/history/${encodeURIComponent(workout.session_id)}/redo`,
-          { method: "POST" }
-        );
-
-        currentWorkoutSessionId = result.active_workout.session_id;
-
-        await loadActiveWorkout();
+        const [active, paused] = await Promise.all([
+          requestJson("/api/active-workout"),
+          requestJson("/api/paused-workouts"),
+        ]);
+        if (active.active_workout || paused.paused_workouts.length > 0) {
+          promptToReplaceWorkout("redo", active.active_workout, workout.session_id);
+        } else {
+          await redoSavedWorkout(workout.session_id);
+        }
 
       } catch (error) {
         historyMessage.textContent = error.message;
@@ -1132,14 +1182,12 @@ function renderPausedWorkouts(workouts) {
       resumeButton.textContent = "Resuming...";
       pausedWorkoutMessage.textContent = "";
       try {
-        const result = await requestJson(
-          `/api/paused-workouts/${encodeURIComponent(workout.session_id)}/resume`,
-          { method: "POST" }
-        );
-        showPage("build");
-        renderActiveWorkout(result.active_workout);
-        openWorkoutSheet();
-        await loadPausedWorkouts();
+        const active = await requestJson("/api/active-workout");
+        if (active.active_workout) {
+          promptToReplaceWorkout("resume", active.active_workout, workout.session_id);
+        } else {
+          await resumeSavedWorkout(workout.session_id);
+        }
       } catch (error) {
         pausedWorkoutMessage.textContent = error.message;
       } finally {
@@ -1164,6 +1212,28 @@ async function loadPausedWorkouts() {
     pausedWorkoutSection.hidden = false;
     pausedWorkoutMessage.textContent = error.message;
   }
+}
+
+async function resumeSavedWorkout(sessionId) {
+  const result = await requestJson(
+    `/api/paused-workouts/${encodeURIComponent(sessionId)}/resume`,
+    { method: "POST" }
+  );
+  showPage("build");
+  renderActiveWorkout(result.active_workout);
+  openWorkoutSheet();
+  await loadPausedWorkouts();
+}
+
+async function redoSavedWorkout(sessionId) {
+  const result = await requestJson(
+    `/api/history/${encodeURIComponent(sessionId)}/redo`,
+    { method: "POST" }
+  );
+  showPage("build");
+  renderActiveWorkout(result.active_workout);
+  openWorkoutSheet();
+  await loadPausedWorkouts();
 }
 
 async function loadStats(period = "week") {
@@ -1541,20 +1611,28 @@ plannerForm.addEventListener("submit", async (event) => {
   }
   recommendButton.disabled = true;
   try {
-    if (currentWorkoutSessionId) {
-      promptToReplaceWorkout("create", {
-        session_id: currentWorkoutSessionId,
-        structure_mode: currentWorkoutStructureMode,
-        completed_set_keys: [...completedWorkoutSteps],
-        notes: currentWorkoutNotes,
-      });
-      return;
+    if (!skipWorkoutConflictCheck) {
+      if (currentWorkoutSessionId) {
+        promptToReplaceWorkout("create", {
+          session_id: currentWorkoutSessionId,
+          structure_mode: currentWorkoutStructureMode,
+          completed_set_keys: [...completedWorkoutSteps],
+          notes: currentWorkoutNotes,
+        });
+        return;
+      }
+      const active = await requestJson("/api/active-workout");
+      if (active.active_workout) {
+        promptToReplaceWorkout("create", active.active_workout);
+        return;
+      }
+      const paused = await requestJson("/api/paused-workouts");
+      if (paused.paused_workouts.length > 0) {
+        promptToReplaceWorkout("create", null);
+        return;
+      }
     }
-    const active = await requestJson("/api/active-workout");
-    if (active.active_workout) {
-      promptToReplaceWorkout("create", active.active_workout);
-      return;
-    }
+    skipWorkoutConflictCheck = false;
 
     const duration = Number(durationSelect.value);
     const level = document.querySelector('input[name="level"]:checked').value;
@@ -1597,6 +1675,7 @@ plannerForm.addEventListener("submit", async (event) => {
   } catch (error) {
     plannerMessage.textContent = error.message;
   } finally {
+    skipWorkoutConflictCheck = false;
     recommendButton.disabled = !goalSelect.value;
   }
 });
@@ -1628,6 +1707,8 @@ cancelNewWorkoutButton.addEventListener("click", () => {
 newWorkoutConfirmDialog.addEventListener("close", () => {
   pendingNewWorkoutAction = null;
   pendingWorkoutToPause = null;
+  newWorkoutConfirmTitle.textContent = "Start a new workout?";
+  confirmNewWorkoutButton.textContent = "Yes, save and create new";
 });
 
 newWorkoutConfirmDialog.addEventListener("click", (event) => {
@@ -1643,14 +1724,15 @@ newWorkoutConfirmDialog.addEventListener("cancel", (event) => {
 confirmNewWorkoutButton.addEventListener("click", async () => {
   confirmNewWorkoutButton.disabled = true;
   cancelNewWorkoutButton.disabled = true;
-  newWorkoutConfirmMessage.textContent = "Saving your current workout...";
-  const action = pendingNewWorkoutAction;
+  const pendingAction = pendingNewWorkoutAction;
   const workout = pendingWorkoutToPause;
+  newWorkoutConfirmMessage.textContent = workout ? "Saving your current workout..." : "";
   try {
-    if (!action || !workout) {
-      throw new Error("There is no active workout to save.");
+    if (!pendingAction) throw new Error("The requested workout action is unavailable.");
+    if (workout) {
+      await pauseWorkout(workout);
+      if (workout.session_id === currentWorkoutSessionId) hideGeneratedWorkout();
     }
-    await pauseWorkout(workout);
   } catch (error) {
     newWorkoutConfirmMessage.textContent = error.message;
     confirmNewWorkoutButton.disabled = false;
@@ -1662,10 +1744,11 @@ confirmNewWorkoutButton.addEventListener("click", async () => {
   newWorkoutConfirmDialog.close();
   confirmNewWorkoutButton.disabled = false;
   cancelNewWorkoutButton.disabled = false;
-  if (action === "create") {
+  if (pendingAction.action === "create") {
     hideGeneratedWorkout();
+    skipWorkoutConflictCheck = true;
     plannerForm.requestSubmit();
-  } else if (action === "start") {
+  } else if (pendingAction.action === "start") {
     startButton.disabled = true;
     try {
       await startActiveWorkoutFromPlan();
@@ -1673,6 +1756,18 @@ confirmNewWorkoutButton.addEventListener("click", async () => {
       plannerMessage.textContent = error.message;
     } finally {
       startButton.disabled = false;
+    }
+  } else if (pendingAction.action === "resume") {
+    try {
+      await resumeSavedWorkout(pendingAction.sessionId);
+    } catch (error) {
+      pausedWorkoutMessage.textContent = error.message;
+    }
+  } else if (pendingAction.action === "redo") {
+    try {
+      await redoSavedWorkout(pendingAction.sessionId);
+    } catch (error) {
+      historyMessage.textContent = error.message;
     }
   }
 });
